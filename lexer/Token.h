@@ -11,6 +11,8 @@ enum class TokenType {
     OPERATOR,     // operators like + - * = 
     PUNCTUATION,  // ( ) , ;
     KEYWORD,      // let in fn where etc.
+    SPACES,       // Space | ht | Eol  — produced then DELETED by Screener
+    COMMENT,     // // ... EOL        — produced then DELETED by Screener
     END_OF_FILE   // marks end of input
 };
 
@@ -22,6 +24,8 @@ struct Token {
     // Constructor
     Token(TokenType t, std::string v) 
         : type(t), value(v) {}
+
+    std::string typeName() const;
 };
 
 #endif
