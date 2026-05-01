@@ -1,4 +1,4 @@
-# RPAL Interpreter — `rpal20`
+# RPAL Interpreter - `rpal20`
 
 > CS 3513 Programming Languages | University of Moratuwa | April/May 2026  
 > GitHub: https://github.com/praveen-de-silva/RPAL_Interpreter
@@ -17,7 +17,7 @@
 ## What Is This?
 
 An **interpreter** for RPAL (Right-reference Pedagogic Algorithmic Language).  
-It reads an RPAL source file and directly evaluates and prints the result — no separate compile step.
+It reads an RPAL source file and directly evaluates and prints the result - no separate compile step.
 
 ---
 
@@ -94,7 +94,7 @@ rpal20/
 |--------|---------|
 | `main` | Stable, merged code only |
 | `feature/lexerAndScreener-230123K` | Stage 1 & 2 (complete) |
-| `feature/standardizer-230123K` | Stage 4 — active development |
+| `feature/standardizer-230123K` | Stage 4 - active development |
 
 **Pre-work checklist before coding on any branch:**
 1. `git checkout main` → `git pull origin main`
@@ -133,8 +133,8 @@ This section summarises the key rules and decisions taken directly from the proj
 | `COMMENT` | `// ... EOL` | **DELETE** (Screener) |
 
 **Critical rules:**
-- `_` is an **operator symbol**, not a letter — but allowed inside identifiers
-- `'` is both a **string delimiter** and an **operator symbol** — handled carefully
+- `_` is an **operator symbol**, not a letter - but allowed inside identifiers
+- `'` is both a **string delimiter** and an **operator symbol** - handled carefully
 - Keywords checked **after** reading a full word: `let` = keyword, `letter` = identifier
 - RPAL Keywords: `let in fn where aug or not true false nil dummy within and rec gr ge ls le eq ne`
 
@@ -150,7 +150,7 @@ This section summarises the key rules and decisions taken directly from the proj
 | `rec f = E` | `= f ( Ystar ( lambda f . E ) )` |
 | `within (x1=E1) (x2=E2)` | `gamma ( lambda x2 . E2 ) ( gamma ( lambda x1 . E1 ) E0 )` |
 
-### CSE Machine — 13 Rules Summary
+### CSE Machine - 13 Rules Summary
 
 | Rule | Trigger | Action |
 |------|---------|--------|
@@ -161,8 +161,8 @@ This section summarises the key rules and decisions taken directly from the proj
 | 5 | `→` (conditional) on control | Evaluate condition, branch to true/false delta |
 | 6–13 | Various built-in operations | Arithmetic, boolean, string, tuple operations |
 
-### Parser — Grammar Functions
+### Parser - Grammar Functions
 
 20 recursive descent functions: `parseE` → `parseEw` → `parseT` → `parseTa` → `parseTc` → `parseB` → `parseBt` → `parseBs` → `parseBp` → `parseA` → `parseAt` → `parseAf` → `parseAp` → `parseR` → `parseRn` → `parseD` → `parseDa` → `parseDr` → `parseDb` → `parseVb` → `parseVl`
 
-> ⚠️ Left-recursive rules (`A`, `B`, `Bt`, `Ta`, `R`, `Ap`) **must** use `while` loops — not direct recursion.
+> ⚠️ Left-recursive rules (`A`, `B`, `Bt`, `Ta`, `R`, `Ap`) **must** use `while` loops - not direct recursion.
