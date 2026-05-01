@@ -3,6 +3,7 @@
 #include "lexer/Token.h"
 #include "lexer/Lexer.h"
 #include "lexer/Screener.h"
+#include "parser/Parser.h"
 
 //  --- printTokens - pretty-print a token list for debugging. ---
 // Shows: index | type (padded) | value
@@ -25,8 +26,8 @@ void printTokens(const std::vector<Token>& tokens, const std::string& label) {
 }
 
 // --- main ---
-// - runs Stage 1 (Lexer) and Stage 2 (Screener),
-// - printing both the raw and filtered token streams.
+// - runs Stage 1 (Lexer) and Stage 2 (Screener) and Stage 3 (Parser)
+// - printing the raw and filtered token streams, and then the AST.
 
 // Usage:  ./rpal20 <filename>
 
@@ -59,6 +60,20 @@ int main(int argc, char* argv[]) {
     std::cout << "\nSummary: " << allTokens.size() << " total tokens → "
               << removed << " deleted (SPACES/COMMENT) → "
               << cleanTokens.size() << " passed to Parser\n\n";
+ 
+    // -- Stage 3: Parser --
+    // Builds the Abstract Syntax Tree
+    Parser parser(cleanTokens);
+    ASTNode* ast = parser.parse();
+    
+    std::cout << "==========================================\n";
+    std::cout << " Stage 3 - Parser output (AST)\n";
+    std::cout << "==========================================\n";
+    if (ast) {
+        ast->print();
+        delete ast; // Clean up memory
+    }
+    std::cout << "\n";
  
     return 0;
 }

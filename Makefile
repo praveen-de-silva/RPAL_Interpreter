@@ -6,7 +6,9 @@ TARGET   = rpal20
 SRCS = main.cpp \
        lexer/Token.cpp \
        lexer/Lexer.cpp \
-       lexer/Screener.cpp
+       lexer/Screener.cpp \
+       parser/ASTNode.cpp \
+       parser/Parser.cpp
  
 all: $(TARGET)
  
