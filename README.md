@@ -9,8 +9,8 @@
 
 | Index No. | Responsibilities |
 |-----------|-----------------|
-| 230094U | Parser + Flattener + CSE Machine (rules 1–8) + Testing + Report |
-| 230123K | Lexer + Screener + Standardizer + CSE Machine (built-ins, rules 9–13) + Testing + Report |
+| 230094U | Parser + Flattener + CSE Machine (rules 1–8) + Testing & Report |
+| 230123K | Lexer & Screener + Standardizer + CSE Machine (built-ins, rules 9–13) + Testing & Report |
 
 ---
 
