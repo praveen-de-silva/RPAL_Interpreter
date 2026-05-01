@@ -6,6 +6,14 @@
 #include <set>
 #include "Token.h"
 
+// -------------------------------------------------------------------
+// Lexer - Stage 1 of the RPAL interpreter pipeline.
+// 
+// Purpose: read a file and produce a token stream including:
+//          IDENTIFIER, INTEGER, STRING, OPERATOR, PUNCTUATION
+//          SPACES and COMMENTS (which will be removed by Screener)
+// -------------------------------------------------------------------
+
 class Lexer {
 public:
     explicit Lexer(const std::string& filename); // Constructor: reads the entire file into memory
