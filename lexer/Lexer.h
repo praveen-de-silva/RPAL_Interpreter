@@ -6,40 +6,49 @@
 #include <set>
 #include "Token.h"
 
+// -------------------------------------------------------------------
+// Lexer - Stage 1 of the RPAL interpreter pipeline.
+// 
+// Purpose: read a file and produce a token stream including:
+//          IDENTIFIER, INTEGER, STRING, OPERATOR, PUNCTUATION
+//          SPACES and COMMENTS (which will be removed by Screener)
+// -------------------------------------------------------------------
+
 class Lexer {
+public:
+    explicit Lexer(const std::string& filename); // Constructor: reads the entire file into memory
+    std::vector<Token> tokenize(); // Produces the list of tokens
+
 private:
     std::string source;   // entire file content
     int pos;              // current position
     int line;             // current line number
 
-    // Helper methods
-    char currentChar();
-    char peek();
-    void advance();
-    void skipWhitespace();
-    void skipComment();
+    // --- Character access ---
+    char currentChar() const;   // char at pos (or '\0' at EOF)
+    char peek()        const;   // char at pos+1 (or '\0')
+    void advance();             // move pos forward, track line number
 
-    Token readIdentifierOrKeyword();
-    Token readInteger();
-    Token readString();
-    Token readOperator();
-    Token readPunctuation();
+    // --- Character classification ---
+    bool isLetter       (char c) const;  // A-Z or a-z
+    bool isDigit        (char c) const;  // 0-9
+    bool isOperatorSymbol(char c) const; // one of the 22 RPAL operator symbols
 
-    bool isLetter(char c);
-    bool isDigit(char c);
-    bool isOperatorSymbol(char c);
-
-    // RPAL keywords
-    std::set<std::string> keywords = {
+    // --- Token readers ---
+    Token readIdentifierOrKeyword(); // Letter (Letter|Digit|_)*
+    Token readInteger();             // Digit+
+    Token readString();              // '(\\.|[^'\\])*'
+    Token readOperator();            // Op
+    Token readSpaces();              // space | ht | Eol           → SPACES
+    Token readComment();             // // ... EOL  
+    
+    // --- RPAL keywords ---
+    const std::set<std::string> KEYWORDS = {
         "let", "in", "fn", "where", "aug",
-        "or", "not", "true", "false", "nil",
+        "or",  "not", "true", "false", "nil",
         "dummy", "within", "and", "rec",
         "gr", "ge", "ls", "le", "eq", "ne"
     };
-
-public:
-    Lexer(const std::string& filename);
-    std::vector<Token> tokenize();
 };
 
 #endif
