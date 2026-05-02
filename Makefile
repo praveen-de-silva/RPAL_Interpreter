@@ -8,7 +8,8 @@ SRCS = main.cpp \
        lexer/Lexer.cpp \
        lexer/Screener.cpp \
        parser/ASTNode.cpp \
-       parser/Parser.cpp
+       parser/Parser.cpp \
+       standardizer/Standardizer.cpp
  
 all: $(TARGET)
  
