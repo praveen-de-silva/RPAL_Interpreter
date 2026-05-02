@@ -38,6 +38,8 @@ int main(int argc, char* argv[]) {
     }
  
     std::string filename = argv[1];
+
+    try {
  
     // -- Stage 1: Lexer --
     // Produces ALL tokens including SPACES and COMMENT
@@ -48,7 +50,7 @@ int main(int argc, char* argv[]) {
     printTokens(allTokens, "Stage 1 - Lexer output (ALL tokens)");
  
     // -- Stage 2: Screener --
-    // Removes SPACES and COMMENT → clean stream for Parser
+    // Removes SPACES and COMMENT -> clean stream for Parser
     Screener screener;
     std::vector<Token> cleanTokens = screener.filter(allTokens);
  
@@ -57,8 +59,8 @@ int main(int argc, char* argv[]) {
  
     // Summary
     int removed = (int)allTokens.size() - (int)cleanTokens.size();
-    std::cout << "\nSummary: " << allTokens.size() << " total tokens → "
-              << removed << " deleted (SPACES/COMMENT) → "
+    std::cout << "\nSummary: " << allTokens.size() << " total tokens -> "
+              << removed << " deleted (SPACES/COMMENT) -> "
               << cleanTokens.size() << " passed to Parser\n\n";
  
     // -- Stage 3: Parser --
@@ -71,9 +73,29 @@ int main(int argc, char* argv[]) {
     std::cout << "==========================================\n";
     if (ast) {
         ast->print();
-        delete ast; // Clean up memory
     }
+
+    //-- Stage 4: Standardizer --
+    // standardize AST
+    Standardizer standardizer;
+    ASTNode* st = standardizer.standardize(ast);
+    std::cout << "\n==========================================\n";
+    std::cout << " Stage 4 - Standardizer output (ST)\n";
+    std::cout << "==========================================\n";
+    if (st) {
+        st->print();
+    }
+
+    std::cout << "\n[Stage 5: Flattener - not yet implemented]\n";
+    std::cout << "[Stage 6: CSE Machine - not yet implemented]\n";
+
+    delete ast; // Clean up memory
+
     std::cout << "\n";
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
  
     return 0;
 }
