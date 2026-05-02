@@ -4,6 +4,7 @@
 #include "lexer/Lexer.h"
 #include "lexer/Screener.h"
 #include "parser/Parser.h"
+#include "standardizer/Standardizer.h"
 
 //  --- printTokens - pretty-print a token list for debugging. ---
 // Shows: index | type (padded) | value
