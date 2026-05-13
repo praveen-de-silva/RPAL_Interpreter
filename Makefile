@@ -10,7 +10,10 @@ SRCS = main.cpp \
        parser/ASTNode.cpp \
        parser/Parser.cpp \
        standardizer/Standardizer.cpp \
-       flattener/Flattener.cpp
+       flattener/Flattener.cpp \
+       cse_machine/StackValue.cpp \
+       cse_machine/Environment.cpp \
+       cse_machine/CSEMachine.cpp
  
 all: $(TARGET)
  
