@@ -582,14 +582,14 @@ void Standardizer::standardizeRec(ASTNode* node) {
 //
 // AST:                             ST:
 //   within                          gamma
-//    ├── = (x1, E1)                  ├── lambda
-//    └── = (x2, E2)                  │    ├── x2
-//                                     │    └── E2
-//                                     └── gamma
+// AST:                      ST:
+//   within                    =
+//    ├── = (x1, E1)                  ├── x2
+//    └── = (x2, E2)                  └── gamma
 //                                          ├── lambda
 //                                          │    ├── x1
-//                                          │    └── E1
-//                                          └── E0 (nil if not present)
+//                                          │    └── E2
+//                                          └── E1
 //
 // within is like a nested let.
 void Standardizer::standardizeWithin(ASTNode* node) {
@@ -623,42 +623,29 @@ void Standardizer::standardizeWithin(ASTNode* node) {
     def1->child  = nullptr;
     def2->child  = nullptr;
 
-    // Build inner gamma:
+    // Build lambda:
+    // lambda
+    //  ├── x1
+    //  └── E2
+    ASTNode* lambdaNode  = makeNode("lambda");
+    lambdaNode->child    = x1;
+    x1->sibling          = E2;
+
+    // Build gamma:
     // gamma
     //  ├── lambda
-    //  │    ├── x1
-    //  │    └── E1
-    //  └── (E0 - not present in standard within, use nil placeholder or omit)
-    ASTNode* innerLambda  = makeNode("lambda");
-    innerLambda->child    = x1;
-    x1->sibling           = E1;
-    E1->sibling           = nullptr;
+    //  └── E1
+    ASTNode* gammaNode   = makeNode("gamma");
+    gammaNode->child     = lambdaNode;
+    lambdaNode->sibling  = E1;
 
-    ASTNode* innerGamma   = makeNode("gamma");
-    innerGamma->child     = innerLambda;
-    innerLambda->sibling  = nullptr;
-    // Note: inner gamma has only lambda as child here
-    // The second operand depends on context - within is:
-    // gamma (lambda x2 E2) (gamma (lambda x1 E1) E0)
-    // If no E0, we just use the inner gamma as the second argument
-
-    // Build outer lambda:
-    // lambda
+    // Transform node to '=':
+    // =
     //  ├── x2
-    //  └── E2
-    ASTNode* outerLambda = makeNode("lambda");
-    outerLambda->child   = x2;
-    x2->sibling          = E2;
-    E2->sibling          = nullptr;
-
-    // Transform node to outer gamma:
-    // gamma
-    //  ├── outerLambda (lambda x2 E2)
-    //  └── innerGamma  (gamma (lambda x1 E1))
-    node->type              = "gamma";
-    node->child             = outerLambda;
-    outerLambda->sibling    = innerGamma;
-    innerGamma->sibling     = nullptr;
+    //  └── gamma
+    node->type           = "=";
+    node->child          = x2;
+    x2->sibling          = gammaNode;
 
     // Clean up now-empty definition nodes
     delete def1;

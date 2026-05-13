@@ -5,6 +5,7 @@
 #include "lexer/Screener.h"
 #include "parser/Parser.h"
 #include "standardizer/Standardizer.h"
+#include "flattener/Flattener.h"
 
 //  --- printTokens - pretty-print a token list for debugging. ---
 // Shows: index | type (padded) | value
@@ -87,8 +88,15 @@ int main(int argc, char* argv[]) {
         st->print();
     }
 
-    std::cout << "\n[Stage 5: Flattener - not yet implemented]\n";
-    std::cout << "[Stage 6: CSE Machine - not yet implemented]\n";
+    //-- Stage 5: Flattener --
+    Flattener flattener;
+    flattener.flatten(st);
+    std::cout << "\n==========================================\n";
+    std::cout << " Stage 5 - Flattener output (Control Structures)\n";
+    std::cout << "==========================================\n";
+    flattener.print();
+
+    std::cout << "\n[Stage 6: CSE Machine - not yet implemented]\n";
 
     delete ast; // Clean up memory
 
