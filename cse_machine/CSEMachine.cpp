@@ -258,43 +258,56 @@ void CSEMachine::rule11_ystar(StackValue& lambda) {
 }
 
 // Rule 12: GAMMA fires with an eta closure as rator.
-// Unwrap one recursion step:
-//   1. Create new env (child of eta's env)
-//   2. Bind the recursive name -> eta closure (so the function can call itself)
-//   3. Push env marker, push lambda body, switch env
-// (eta and rand come from the GAMMA dispatcher in rule3_4_gamma)
+//
+// Bug-free approach: instead of pushing a LAMBDA node onto control and relying
+// on stack ordering (which reverses rator/rand), we peek directly into
+// delta[eta.deltaIndex] to find the inner lambda and apply it to rand inline.
+//
+// Structure produced by the standardizer for  rec f x = E :
+//   eta(delta_outer, [f], e)  where delta_outer = [ LAMBDA(delta_inner, [x]) ]
+//
+// What we do here:
+//   1. e_rec  = child of eta.envIndex,  bind f -> eta   (enables self-recursion)
+//   2. e_call = child of e_rec,         bind x -> rand  (actual argument)
+//   3. Push ENV marker, push delta_inner body, switch to e_call
 void CSEMachine::rule12_eta(StackValue& eta, StackValue& rand) {
-    // Create a new environment as child of the eta's captured env
-    int e_new = newEnv(eta.envIndex);
-
-    // Bind the recursive variable to the eta closure itself.
-    // This is what allows self-reference: when the body looks up
-    // the function name, it finds the eta closure and can recurse.
+    // Step 1: environment for the recursive binding  (simulates outer lambda applied to eta)
+    int e_rec = newEnv(eta.envIndex);
     if (!eta.boundVars.empty())
-        envTable[e_new].bind(eta.boundVars[0],
+        envTable[e_rec].bind(eta.boundVars[0],
                              StackValue::makeEta(eta.deltaIndex,
                                                  eta.boundVars,
                                                  eta.envIndex));
 
-    // Now apply the underlying lambda body to the original argument (rand).
-    // Push env marker to restore current env after this call.
+    // Step 2: find the inner lambda in delta[eta.deltaIndex]
+    // For any valid RPAL rec definition the first (and only) node in that delta
+    // is a LAMBDA carrying the actual parameter(s) and the body's delta index.
+    const auto& outerBody = deltas[eta.deltaIndex];
+    if (outerBody.empty() || outerBody[0].type != CSENodeType::LAMBDA)
+        throw std::runtime_error("rule12: eta's delta does not begin with LAMBDA");
+
+    const CSENode& innerLambda = outerBody[0];
+
+    // Step 3: environment for the actual call  (simulates inner lambda applied to rand)
+    int e_call = newEnv(e_rec);
+    if (innerLambda.boundVars.size() == 1) {
+        envTable[e_call].bind(innerLambda.boundVars[0], rand);
+    } else {
+        if (rand.type != ValueType::TUPLE ||
+            rand.tupleElems.size() != innerLambda.boundVars.size())
+            throw std::runtime_error("rule12: argument count does not match parameter count");
+        for (size_t i = 0; i < innerLambda.boundVars.size(); ++i)
+            envTable[e_call].bind(innerLambda.boundVars[i], rand.tupleElems[i]);
+    }
+
+    // Push ENV marker so Rule 5 restores the caller's environment when the body finishes
     CSENode envMarker(CSENodeType::ENV);
     envMarker.envIndex = currentEnv;
     control.push_back(envMarker);
 
-    // Push rand back to stack (it's the actual argument to the function body)
-    stack.push_back(rand);
-
-    // Push gamma onto control so the lambda body gets applied to rand
-    control.push_back(CSENode(CSENodeType::GAMMA));
-
-    // Push a lambda node representing the underlying closure
-    CSENode lambdaNode(CSENodeType::LAMBDA, eta.deltaIndex);
-    lambdaNode.boundVars = eta.boundVars;
-    control.push_back(lambdaNode);
-
-    // Switch to the new environment
-    currentEnv = e_new;
+    // Push the function body and switch into the call environment
+    pushDelta(innerLambda.deltaIndex);
+    currentEnv = e_call;
 }
 
 // ============================================================
