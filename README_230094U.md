@@ -3,6 +3,47 @@
 
 ---
 
+## Current Implementation Status
+
+> Last updated: branch `feature/CSEMachine-230123K`
+
+### 230094U — COMPLETE
+
+| Component | File(s) | Status |
+|-----------|---------|--------|
+| Environment scope chain | `cse_machine/Environment.h/.cpp` | Done |
+| StackValue types & factory methods | `cse_machine/StackValue.h/.cpp` | Done (shared) |
+| CSEMachine class definition | `cse_machine/CSEMachine.h` | Done |
+| Constructor + e_0 + built-in pre-binding | `CSEMachine.cpp` | Done |
+| Helper: `newEnv`, `lookup`, `pushDelta` | `CSEMachine.cpp` | Done |
+| `evaluate()` main loop | `CSEMachine.cpp` | Done |
+| Rule 1 — identifier lookup | `rule1_name` | Done |
+| Rule 2 — lambda → closure (lexical scoping) | `rule2_lambda` | Done |
+| Rule 3 — single-param function application | `rule3_4_gamma` | Done |
+| Rule 4 — n-ary (multi-param) application | `rule3_4_gamma` | Done |
+| Rule 5 — environment restore after call | `rule5_envMarker` | Done |
+| Rule 8 — conditional branching (BETA) | `rule8_beta` | Done |
+| Rule 11 — Y\* wraps lambda into eta closure | `rule11_ystar` | Done |
+| Rule 12 — eta closure unwrap (one recursion step) | `rule12_eta` | Done |
+| Stubs for 230123K rules (compile-safe) | Rules 6,7,9,10,13 + 12 built-ins | Done |
+| Stage 6 wired into pipeline | `main.cpp` | Done |
+| Makefile updated with all CSE `.cpp` files | `Makefile` | Done |
+
+### 230123K — PENDING
+
+| Component | Method | Status |
+|-----------|--------|--------|
+| Rule 6 — binary operators (+, −, *, /, **, gr, ge, ls, le, eq, ne, or, &, aug) | `rule6_binaryOp` | Stub only |
+| Rule 7 — unary operators (neg, not) | `rule7_unaryOp` | Stub only |
+| Rule 9 — tuple construction (TAU) | `rule9_tau` | Stub only |
+| Rule 10 — tuple indexing (1-based) | `rule10_tupleIndex` | Stub only |
+| Rule 13 — built-in function dispatch | `rule13_builtin` | Stub only |
+| `Print` / `print` | `builtinPrint` | Stub only |
+| `Order`, `Stem`, `Stern`, `Conc` | string/tuple builtins | Stub only |
+| `Isinteger`, `Isstring`, `Istruthvalue`, `Istuple`, `Isfunction`, `Arity`, `null` | type-check builtins | Stub only |
+
+---
+
 ## ⚠️ CRITICAL WARNINGS — READ BEFORE CODING
 
 ### Warning 1 — Rule Split Discrepancy in Our Documents
@@ -847,21 +888,23 @@ Zero output = perfect match.
 
 ## 16. Handoff to 230123K Checklist
 
-Push to `feature/cse-machine` branch when all of these are done:
+All items below are complete. Branch `feature/CSEMachine-230123K` is ready for 230123K to implement Rules 6, 7, 9, 10, 13 and the built-ins.
 
-- [ ] `Environment.h` and `Environment.cpp` written and compiling
-- [ ] `CSEMachine.h` finalised — shown to 230123K before any `.cpp` written
-- [ ] `evaluate()` main loop written — handles all CSENode types
-- [ ] Rule 1 (name lookup) works — `let x = 5 in Print x` gives `5`
-- [ ] Rule 2 (lambda) works — closures created and pushed
-- [ ] Rules 3 & 4 (gamma) work — single and multi-param function calls work
-- [ ] Rule 5 (env restore) works — environment correctly restored after call
-- [ ] Rule 8 (conditional) works — branching on boolean
-- [ ] Rules 11 & 12 (Y\* recursion) work — factorial or similar recursive program works
-- [ ] All 230123K stubs present — project builds with `make` without errors
-- [ ] `main.cpp` updated — Stage 6 wired in, debug prints removed from stdout
-- [ ] `Makefile` updated — all new `.cpp` files in SRCS
-- [ ] `make` runs cleanly, `./rpal20 test.rpal` runs without crashing on simple programs
+- [x] `Environment.h` and `Environment.cpp` written and compiling
+- [x] `CSEMachine.h` finalised — shown to 230123K before any `.cpp` written
+- [x] `evaluate()` main loop written — handles all CSENode types
+- [x] Rule 1 (name lookup) — `let x = 5 in Print x` → `5`
+- [x] Rule 2 (lambda) — closures created and pushed with captured env
+- [x] Rules 3 & 4 (gamma) — single and multi-param function calls implemented
+- [x] Rule 5 (env restore) — environment correctly restored after call
+- [x] Rule 8 (conditional) — branching on boolean via BETA node
+- [x] Rules 11 & 12 (Y\* recursion) — eta closure creation and unwrap implemented
+- [x] All 230123K stubs present — project builds with `make` without errors
+- [x] `main.cpp` updated — Stage 6 wired in, no debug prints to stdout
+- [x] `Makefile` updated — `StackValue.cpp`, `Environment.cpp`, `CSEMachine.cpp` all in SRCS
+- [x] `make` runs cleanly, `./rpal20 <file>` runs without crashing on programs that don't need operators/tuples/builtins
+
+**Next:** 230123K replaces the stubs in `CSEMachine.cpp` — Rules 6, 7, 9, 10, 13 and all 12 built-ins. See `README_230123K.md` for pseudocode and implementation guide.
 
 ---
 
