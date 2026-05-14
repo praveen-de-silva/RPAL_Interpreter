@@ -179,6 +179,12 @@ ASTNode* Standardizer::standardize(ASTNode* node) {
     else if (node->type == "within") {
         standardizeWithin(node);
     }
+    else if (node->type == "@") {
+        standardizeAt(node);
+    }
+    else if (node->type == "()") {
+        standardizeEmptyParam(node);
+    }
     // All other nodes (gamma, +, -, *, etc.) need no transformation
 
     return node;
@@ -650,4 +656,47 @@ void Standardizer::standardizeWithin(ASTNode* node) {
     // Clean up now-empty definition nodes
     delete def1;
     delete def2;
+}
+
+// ── Rule 8: @ (infix application) ────────────────────────────────────────────
+//
+// AST:                      ST:
+//   @                         gamma
+//    ├── E                      ├── gamma
+//    ├── n                      │    ├── n
+//    └── R                      │    └── E
+//                               └── R
+//
+// E @n R  means  apply n to E first, then apply result to R.
+// Equivalent to: (n E) R  =  gamma(gamma(n, E), R)
+void Standardizer::standardizeAt(ASTNode* node) {
+    ASTNode* E = node->child;
+    ASTNode* n = E->sibling;
+    ASTNode* R = n->sibling;
+
+    // Detach all
+    E->sibling = nullptr;
+    n->sibling = nullptr;
+    R->sibling = nullptr;
+
+    // Inner gamma: gamma(n, E)
+    ASTNode* innerGamma = makeNode("gamma");
+    innerGamma->child   = n;
+    n->sibling          = E;
+
+    // Transform node in place to outer gamma: gamma(innerGamma, R)
+    node->type          = "gamma";
+    node->child         = innerGamma;
+    innerGamma->sibling = R;
+}
+
+// ── Rule 9: () zero-param Vb ──────────────────────────────────────────────────
+//
+// A '()' node appearing as a Vb in fcn_form or lambda means
+// the function takes no meaningful argument.
+// Standardize by replacing it with 'dummy' so that
+// standardizeFcnForm / standardizeLambda produce: lambda dummy E
+void Standardizer::standardizeEmptyParam(ASTNode* node) {
+    node->type  = "IDENTIFIER";
+    node->value = "dummy";
 }
