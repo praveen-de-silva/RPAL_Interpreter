@@ -1,26 +1,68 @@
-# CSE Machine — Implementation Guide
+# RPAL Interpreter — 230123K Implementation Guide
 ## Member: 230123K | CS3513 Programming Languages | University of Moratuwa
+
+---
+
+## Approach: Pure Lambda Calculus Standardization (Approach A)
+
+This implementation follows **Approach A** (bonus approach): the Standardizer transforms
+ALL language constructs — operators, conditionals, tuples, and tuple-pattern lambdas —
+into pure `gamma` / `lambda` / `IDENTIFIER` nodes. The ST produced by this Standardizer
+contains **only** these node types:
+
+```
+gamma  lambda  =  Ystar
+IDENTIFIER  INTEGER  STRING
+true  false  nil  dummy
+```
+
+No `OPERATOR`, `TAU`, `BETA`, or `->` nodes appear in the ST.
+As a result, CSE Machine Rules 6, 7, 8, and 9 are never triggered at runtime.
+All computation flows through Rule 13 (built-in dispatch), where operators and `Cond`
+are looked up as `BUILTIN` / `PARTIAL` values in `env0`.
+
+A working Approach B implementation (operators/tau/conditionals handled in the CSE
+machine directly) is preserved in the `approach-B` branch as a safe backup.
 
 ---
 
 ## Current Implementation Status
 
-> Last updated: branch `feature/CSEMachine-230123K`
+> Branch: `approach-A`
 
-### 230123K — COMPLETE
+### 230123K — Standardizer (Approach A)
+
+| Rule | Transform | Method | Status |
+|------|-----------|--------|--------|
+| Rule 1 — `let x = E in P` | `gamma(lambda(x,P), E)` | `standardizeLet` | Done |
+| Rule 2 — `where P x = E` | `gamma(lambda(x,P), E)` | `standardizeWhere` | Done |
+| Rule 3/4 — `fcn_form` / multi-param lambda | nested lambdas | `standardizeFcnForm` / `standardizeLambda` | Done |
+| Rule 5 — `and` definitions | `=(tau X..., tau E...)` | `standardizeAnd` | Done |
+| Rule 6 — `rec` | `=(f, Ystar(lambda(f,E)))` | `standardizeRec` | Done |
+| Rule 7 — `within` | `gamma(lambda(x2,E2), gamma(lambda(x1,E1),E0))` | `standardizeWithin` | Done |
+| Rule 8 — `@` (infix) | `gamma(gamma(n,E), R)` | `standardizeAt` | Done |
+| Rule 9 — `()` zero-param | `lambda(dummy, E)` | `standardizeEmptyParam` | Done |
+| **Rule A1** — binary ops | `gamma(gamma(IDENTIFIER(op), E1), E2)` | `standardizeOp` | Done |
+| **Rule A2** — unary ops | `gamma(IDENTIFIER(op), E)` | `standardizeUop` | Done |
+| **Rule A3** — `tau` | `aug` chain from `nil` | `standardizeTau` | Done |
+| **Rule A4** — `->` conditional | `gamma(gamma(gamma(gamma(Cond,B),thunkT),thunkE),nil)` | `standardizeCond` | Done |
+| **Rule A5** — `lambda(,(x,y),E)` tuple-pattern | fresh `_T` + index extraction | `standardizeTuplePattern` | Done |
+
+### 230123K — CSE Machine
 
 | Component | Method | Status |
 |-----------|--------|--------|
-| Rule 6 — binary operators (`+`, `-`, `*`, `/`, `**`, `gr`, `ge`, `ls`, `le`, `eq`, `ne`, `or`, `&`, `aug`) | `rule6_binaryOp` | Done |
-| Rule 7 — unary operators (`neg`, `not`) | `rule7_unaryOp` | Done |
-| Rule 9 — tuple construction from `tau(n)` | `rule9_tau` | Done |
+| Rule 6 — binary operators (`+`, `-`, `*`, `/`, `**`, `gr`, `ge`, `ls`, `le`, `eq`, `ne`, `or`, `&`, `aug`) | `rule6_binaryOp` | Done (Approach B path) |
+| Rule 7 — unary operators (`neg`, `not`) | `rule7_unaryOp` | Done (Approach B path) |
+| Rule 9 — tuple construction from `tau(n)` | `rule9_tau` | Done (Approach B path) |
 | Rule 10 — 1-based tuple indexing | `rule10_tupleIndex` | Done |
-| Rule 13 — built-in dispatch (including curried `Conc`) | `rule13_builtin` | Done |
-| `Print` / `print` — outputs value with trailing newline | `builtinPrint` | Done |
-| `Order` — returns tuple size as integer | `builtinOrder` | Done |
-| `Stem` — returns first character of string | `builtinStem` | Done |
-| `Stern` — returns string without first character | `builtinStern` | Done |
-| `Conc` — curried string concatenation via `PARTIAL` | `builtinConc` | Done |
+| Rule 13 — built-in dispatch (all operators + Cond + 12 built-ins) | `rule13_builtin` | Done |
+| `applyBinaryOp` helper | shared by Rule 6 + Rule 13 PARTIAL path | Done |
+| `Print` / `print` | `builtinPrint` | Done |
+| `Order` | `builtinOrder` | Done |
+| `Stem` | `builtinStem` | Done |
+| `Stern` | `builtinStern` | Done |
+| `Conc` — curried string concatenation | `builtinConc` | Done |
 | `Isinteger` | `builtinIsinteger` | Done |
 | `Isstring` | `builtinIsstring` | Done |
 | `Istruthvalue` | `builtinIstruthvalue` | Done |
@@ -30,397 +72,364 @@
 | `null` | `builtinNull` | Done |
 | `main.cpp` — `-ast` and `-st` flag support | `main.cpp` | Done |
 
-### Full CSE Machine — ALL 13 RULES COMPLETE
+### Full CSE Machine — All 13 Rules
 
-| Rule | Owner | Status |
-|------|-------|--------|
-| Rule 1 — identifier lookup | 230094U | Done |
-| Rule 2 — lambda → closure | 230094U | Done |
-| Rule 3 — single-param function application | 230094U | Done |
-| Rule 4 — n-ary function application | 230094U | Done |
-| Rule 5 — environment restore | 230094U | Done |
-| Rule 6 — binary operators | 230123K | Done |
-| Rule 7 — unary operators | 230123K | Done |
-| Rule 8 — conditional (BETA) | 230094U | Done |
-| Rule 9 — tuple construction (TAU) | 230123K | Done |
-| Rule 10 — tuple indexing | 230123K | Done |
-| Rule 11 — Y\* fixed-point | 230094U | Done |
-| Rule 12 — eta closure unwrap | 230094U | Done |
-| Rule 13 — built-in dispatch + 12 built-ins | 230123K | Done |
+| Rule | Owner | Approach A behaviour | Status |
+|------|-------|---------------------|--------|
+| Rule 1 — identifier lookup | 230094U | Unchanged | Done |
+| Rule 2 — lambda → closure | 230094U | Unchanged | Done |
+| Rule 3 — single-param application | 230094U | Unchanged | Done |
+| Rule 4 — n-ary application | 230094U | Unchanged | Done |
+| Rule 5 — environment restore | 230094U | Unchanged | Done |
+| Rule 6 — binary operators | 230123K | Dead code in Approach A (ops are BUILTIN) | Done |
+| Rule 7 — unary operators | 230123K | Dead code in Approach A (neg/not are BUILTIN) | Done |
+| Rule 8 — conditional (BETA) | 230094U | Dead code in Approach A (-> becomes Cond lambda) | Done |
+| Rule 9 — tuple construction (TAU) | 230123K | Dead code in Approach A (tau → aug chain) | Done |
+| Rule 10 — tuple indexing | 230123K | Still used for tuple access | Done |
+| Rule 11 — Y\* fixed-point | 230094U | Unchanged | Done |
+| Rule 12 — eta closure unwrap | 230094U | Unchanged | Done |
+| Rule 13 — built-in dispatch + operators + Cond | 230123K | Primary compute path in Approach A | Done |
 
 ---
 
-## ⚠️ CRITICAL WARNINGS — READ BEFORE CODING
+## ⚠️ CRITICAL WARNINGS
 
-### Warning 1 — Rule Split Discrepancy in Our Documents
-The `README.md` says your rules are **9–13 + built-ins**. The `RPAL_Interpreter_Complete_Guide_v3.pdf`
-Section 7.1 gives a more precise split. **Follow Guide_v3 Section 7.1**:
+### Warning 1 — Approach A vs Approach B
 
-| What You Own | Rules |
-|---|---|
-| Binary and unary operators | **6, 7** |
-| Tuple formation and selection | **9, 10** |
-| Built-in function application | **13** (all 12 built-ins inside) |
+This repo has two branches:
 
-Rules 1, 2, 3, 4, 5, 8, 11, 12 and the Environment class are **230094U's** — not yours.
+| Branch | Description |
+|--------|-------------|
+| `approach-B` | Safe backup. Operators/tau/conditional handled in CSE machine (Rules 6,7,8,9). |
+| `approach-A` | **Active.** All constructs standardized away. Operators are BUILTINs in `env0`. |
+
+Never merge `approach-B` changes into `approach-A` — the flattener and CSE machine
+differ between them in incompatible ways.
 
 ### Warning 2 — Print Output Must Match `rpal.exe` EXACTLY
+
 > "If your output does not match the correct output you will receive **0 marks** for that test case."
 
-The `Print` built-in (Rule 13 / builtinPrint) is where most marks are lost.
 Every space and newline must be character-perfect. Verify against `rpal.exe` with `diff`.
-One extra newline or space = 0 marks for that test case.
 
-### Warning 3 — Submission Structure (Official Assignment)
-The official `ProgrammingProject.pdf` states:
+### Warning 3 — Submission Structure
+
+The `ProgrammingProject.pdf` states:
 > "Makefile must be **directly under the zip folder**. No nested directories."
 
-Before submitting, zip the **contents** of `rpal20/` directly — not the `rpal20/` folder itself.
-The zip must be named exactly: **`230094U_230123K.zip`**
-Submit to Moodle only. Email submissions are ignored.
+Zip the **contents** of `rpal20/` directly — not the folder. Name: **`230094U_230123K.zip`**
 
 ### Warning 4 — Clean stdout
-The current `main.cpp` has debug prints (Stage 1 token dump, Stage 2 screener output).
-These go to stdout and will break every test case. You must remove them.
-This is also in your scope since you update `main.cpp` for the `-ast` and `-st` flags.
 
-### Warning 5 — Wait for 230094U's `CSEMachine.h`
-You cannot start `CSEMachine.cpp` until 230094U creates and shares `CSEMachine.h`.
-Agree on the header together before either person writes rule implementations.
-While waiting, you can: write the test runner script, study the Flattener output,
-and plan your rule implementations.
+Only `Print` may write to stdout. All debug prints must be removed from `main.cpp`.
 
 ---
 
-## 1. What You Are Building
+## 1. Standardizer — Approach A Rules
 
-Your part completes the CSE Machine with the **computational rules** — operators,
-tuples, and all built-in functions. Without your rules, the machine can run
-closures and recursion (230094U's part) but cannot compute any arithmetic,
-build any tuple, or print any output.
+The Standardizer runs **bottom-up (post-order)**. All children are fully standardized
+before the parent transformation fires. The five Approach A rules below are dispatched
+from the main `standardize()` switch.
 
-Your rules and what they enable:
+### Rule A1 — Binary Operators (`standardizeOp`)
 
-| Rule | What it unlocks |
-|------|----------------|
-| Rule 6 | `1 + 2`, `x gr y`, `a or b`, `aug` — all arithmetic and logic |
-| Rule 7 | `-x`, `not b` — negation |
-| Rule 9 | `(1,2,3)` — tuple construction from `tau` |
-| Rule 10 | `t Order`, `t 1` — tuple element access |
-| Rule 13 | `Print`, `Order`, `Stem`, `Stern`, `Conc`, `Is*`, `Arity`, `null` |
+Any node whose type is a binary operator symbol is rewritten into a curried gamma chain:
+
+```
+op(E1, E2)  =>  gamma(gamma(IDENTIFIER(op), E1), E2)
+```
+
+Example: `+(3, 4)` → `gamma(gamma(IDENTIFIER(+), 3), 4)`
+
+At runtime Rule 13 fires twice: first application pushes a `PARTIAL("+", 3)`,
+second application calls `applyBinaryOp("+", 3, 4)` → pushes `7`.
+
+Operators handled: `+`, `-`, `*`, `/`, `**`, `aug`, `or`, `&`, `gr`, `ge`, `ls`, `le`, `eq`, `ne`
+
+### Rule A2 — Unary Operators (`standardizeUop`)
+
+```
+uop(E)  =>  gamma(IDENTIFIER(uop), E)
+```
+
+At runtime Rule 13 fires once, dispatching to the `neg` or `not` handler.
+
+Operators handled: `neg`, `not`
+
+### Rule A3 — Tau (`standardizeTau`)
+
+A `tau(E1, E2, ..., En)` node is converted into a left-associative `aug` chain
+starting from `nil`:
+
+```
+tau(E1, E2, ..., En)
+  =>  gamma(gamma(aug, gamma(gamma(aug, ... gamma(gamma(aug, nil), E1) ...), En-1)), En)
+```
+
+`nil aug E1 aug E2 ... aug En` builds a tuple `(E1, E2, ..., En)`.
+
+`aug` is a BUILTIN in `env0`. Each `aug` application is a gamma that goes through Rule 13.
+
+### Rule A4 — Conditional (`standardizeCond`)
+
+```
+B -> T | E
+  =>  gamma(gamma(gamma(gamma(Cond, B), lambda(dummy, T)), lambda(dummy, E)), nil)
+```
+
+`T` and `E` are wrapped in `lambda(dummy, ...)` to form **thunks** — they are not evaluated
+until `Cond` selects one. `nil` is applied last to force the selected thunk.
+
+`Cond` is a **3-argument curried built-in** in `env0`:
+1. First application: `Cond(B)` → `PARTIAL("Cond", B)`
+2. Second application: `PARTIAL(B)(thunkT)` → `PARTIAL("Cond", tuple{B, thunkT})`
+3. Third application: `PARTIAL(tuple{B,thunkT})(thunkE)` → push `thunkT` if `B` else `thunkE`
+4. `nil` is then applied to the selected thunk, which forces `lambda(dummy, T)` → evaluates `T`
+
+### Rule A5 — Tuple-Pattern Lambda (`standardizeTuplePattern`)
+
+```
+lambda(,(x, y, ..., z), E)
+  =>  lambda(_T,
+        gamma(lambda(x,
+          gamma(lambda(y, ...,
+            gamma(lambda(z, E), gamma(_T, n))), ...),
+          gamma(_T, 2))),
+        gamma(_T, 1)))
+```
+
+A fresh variable `_T0`, `_T1`, ... (static counter) is introduced. The body wraps `E`
+in nested lambdas that extract each element via 1-indexed `gamma(_T, i)`.
+
+This rule fires in `standardizeLambda` and `standardizeFcnForm` AFTER multi-param
+reduction, because multi-param must first reduce `lambda(,(x,y), z, E)` to
+`lambda(,(x,y), lambda(z, E))` before the tuple-pattern fires.
 
 ---
 
-## 2. Prerequisites — Received from 230094U
+## 2. CSE Machine Changes for Approach A
 
-All prerequisites are complete:
-- [x] `cse_machine/CSEMachine.h` — shared header finalised
-- [x] `cse_machine/CSEMachine.cpp` — Rules 1,2,3,4,5,8,11,12 done, stubs replaced by 230123K
-- [x] `cse_machine/Environment.h/.cpp` — compiling
-- [x] `Makefile` — updated with all new .cpp files
-- [x] Builds without errors or warnings
+### `env0` — All Operators and Cond Bound as BUILTINs
+
+At machine startup `env0` pre-binds every operator name so Rule 1 (identifier lookup)
+returns a `BUILTIN` value instead of an unbound-variable error:
+
+```
+"+", "-", "*", "/", "**", "aug", "or", "&",
+"gr", "ge", "ls", "le", "eq", "ne",
+"neg", "not",
+"Cond"
+```
+
+Plus all 12 standard built-ins: `Print`, `print`, `Order`, `Stem`, `Stern`, `Conc`,
+`Isinteger`, `Isstring`, `Istruthvalue`, `Istuple`, `Isfunction`, `Arity`, `null`
+
+### `applyBinaryOp` Helper
+
+A shared helper extracted from `rule6_binaryOp` so both the old Approach B
+Rule 6 path and the new Approach A Rule 13 PARTIAL path call the same code:
+
+```cpp
+StackValue CSEMachine::applyBinaryOp(const std::string& op,
+                                      const StackValue& left,
+                                      const StackValue& right);
+```
+
+### `rule13_builtin` — PARTIAL dispatch for all operators
+
+```
+First application of binary op:
+  BUILTIN(op)(rand)  →  PARTIAL(op, rand)
+
+Second application of binary op:
+  PARTIAL(op, left)(right)  →  applyBinaryOp(op, left, right)
+
+Unary ops (neg, not):
+  BUILTIN(neg/not)(rand)  →  compute directly, push result
+
+Cond — 3-step curried:
+  BUILTIN(Cond)(B)                     →  PARTIAL("Cond", B)
+  PARTIAL("Cond", B)(thunkT)           →  PARTIAL("Cond", tuple{B, thunkT})
+  PARTIAL("Cond", tuple{B,thunkT})(thunkE)
+    →  push thunkT if B.boolVal, else push thunkE
+```
 
 ---
 
-## 3. Files You Own / Edit
+## 3. Files Owned / Edited
 
 | File | Action |
 |------|--------|
-| `cse_machine/CSEMachine.cpp` | Edit — replace stubs for Rules 6,7,9,10,13 + all built-ins |
-| `main.cpp` | Edit — remove debug prints, add `-ast` and `-st` flags |
-| `test_runner.sh` | Create — automated diff testing script |
-
-> **Do NOT edit:** `CSEMachine.h`, `StackValue.h/.cpp`, `Environment.h/.cpp` — shared files
+| `standardizer/Standardizer.h` | Added 5 Rule A declarations |
+| `standardizer/Standardizer.cpp` | Added Rules A1–A5; fixed lambda cycle bug; fixed And tau re-standardization; added `standardize(innermost)` calls in fcnForm and lambda |
+| `flattener/Flattener.cpp` | Removed `->` and `tau` special cases (now standardized away in Approach A) |
+| `cse_machine/CSEMachine.h` | Added `applyBinaryOp` declaration |
+| `cse_machine/CSEMachine.cpp` | Extended `env0`; added `applyBinaryOp` helper; extended `rule13_builtin` for all ops + Cond 3-arg |
+| `main.cpp` | Removed debug output; added `-ast` / `-st` flags |
 
 ---
 
-## 4. Step 1 — Rule 6: Binary Operators
+## 4. Known Bugs Fixed During Development
 
-**Trigger:** `OPERATOR` node on control where the operator is binary (not `neg` or `not`).
-**Action:** Pop `right` (top of stack), then `left` (below). Compute. Push result.
+### Lambda Cycle Bug (`standardizeLambda`)
 
-**Source:** Operator semantics defined in `RPAL_Lex.pdf` operator symbol list and
-the RPAL language definition. Reference for C++ `std::to_string`:
-https://en.cppreference.com/w/cpp/string/basic_string/to_string
+Multi-param lambda `lambda(x, y, z, E)` is reduced by creating nested lambdas:
+`lambda(x, lambda(y, lambda(z, E)))`. The original loop ran `for i >= 0` which caused
+`params[0]` (`x`) to be made a child of BOTH `node` AND the outermost created lambda —
+a circular sibling chain causing infinite loops in the ST printer / flattener.
+
+**Fix:** Changed loop bound from `i >= 0` to `i >= 1`. `params[0]` is only attached
+to `node` (as its param), never duplicated into the created lambda chain.
+
+### And Rule Creates Unvisited Tau Nodes
+
+Bottom-up traversal does not re-visit newly created nodes. `standardizeAnd` creates
+fresh `tau` nodes for the variables and expressions. Without explicit re-standardization
+those tau nodes would reach the flattener as raw `tau` — illegal in Approach A.
+
+**Fix:** Added explicit `standardize(tauVars)` and `standardize(tauVals)` calls at the
+end of `standardizeAnd`.
+
+### FcnForm / Lambda Miss Tuple-Pattern in New Lambdas
+
+`standardizeFcnForm` and `standardizeLambda` create new inner lambda nodes during
+multi-param reduction. If those inner lambdas have a comma (tuple-pattern) param,
+the tuple-pattern rule never fires on them because traversal already passed that level.
+
+**Fix:** Added `standardize(innermost)` at the end of both functions to re-process
+the innermost newly-created lambda.
+
+### Tuple-Pattern Check Order in `standardizeLambda`
+
+Initially the comma check appeared before the multi-param reduction. For
+`lambda(,(x,y), z, E)` this would fire tuple-pattern on a lambda that still has
+multiple params (`,(x,y)` and `z`), which is wrong. Multi-param must first reduce it
+to `lambda(,(x,y), lambda(z,E))`, then tuple-pattern fires on the outer lambda.
+
+**Fix:** Moved the comma check to run AFTER the multi-param section.
+
+---
+
+## 5. Step-by-Step CSE Rule Implementations
+
+### Rule 6 — Binary Operators (Approach B path, still compiled)
 
 ```cpp
-// Rule 6: Binary operator on control.
-// Pop right operand (top of stack), then left operand.
-// Compute result and push to stack.
 void CSEMachine::rule6_binaryOp(const CSENode& node) {
     StackValue right = stack.back(); stack.pop_back();
     StackValue left  = stack.back(); stack.pop_back();
-    const std::string& op = node.value;
-
-    // --- Integer arithmetic ---
-    if (op == "+") {
-        stack.push_back(StackValue::makeInt(left.intVal + right.intVal));
-
-    } else if (op == "-") {
-        stack.push_back(StackValue::makeInt(left.intVal - right.intVal));
-
-    } else if (op == "*") {
-        stack.push_back(StackValue::makeInt(left.intVal * right.intVal));
-
-    } else if (op == "/") {
-        if (right.intVal == 0)
-            throw std::runtime_error("Division by zero");
-        stack.push_back(StackValue::makeInt(left.intVal / right.intVal));
-
-    } else if (op == "**") {
-        // Integer exponentiation — RPAL only needs non-negative exponents
-        int base = left.intVal, exp = right.intVal, result = 1;
-        if (exp < 0)
-            throw std::runtime_error("** : negative exponent not supported");
-        for (int i = 0; i < exp; ++i) result *= base;
-        stack.push_back(StackValue::makeInt(result));
-
-    // --- Integer comparison (produce boolean) ---
-    } else if (op == "gr") {
-        stack.push_back(StackValue::makeBool(left.intVal > right.intVal));
-    } else if (op == "ge") {
-        stack.push_back(StackValue::makeBool(left.intVal >= right.intVal));
-    } else if (op == "ls") {
-        stack.push_back(StackValue::makeBool(left.intVal < right.intVal));
-    } else if (op == "le") {
-        stack.push_back(StackValue::makeBool(left.intVal <= right.intVal));
-
-    // --- Equality — works for int, string, and bool ---
-    } else if (op == "eq") {
-        if (left.type == ValueType::INTEGER)
-            stack.push_back(StackValue::makeBool(left.intVal == right.intVal));
-        else if (left.type == ValueType::STRING)
-            stack.push_back(StackValue::makeBool(left.strVal == right.strVal));
-        else if (left.type == ValueType::BOOL)
-            stack.push_back(StackValue::makeBool(left.boolVal == right.boolVal));
-        else
-            throw std::runtime_error("eq: unsupported type");
-
-    } else if (op == "ne") {
-        if (left.type == ValueType::INTEGER)
-            stack.push_back(StackValue::makeBool(left.intVal != right.intVal));
-        else if (left.type == ValueType::STRING)
-            stack.push_back(StackValue::makeBool(left.strVal != right.strVal));
-        else if (left.type == ValueType::BOOL)
-            stack.push_back(StackValue::makeBool(left.boolVal != right.boolVal));
-        else
-            throw std::runtime_error("ne: unsupported type");
-
-    // --- Boolean logic ---
-    } else if (op == "or") {
-        stack.push_back(StackValue::makeBool(left.boolVal || right.boolVal));
-    } else if (op == "&") {
-        stack.push_back(StackValue::makeBool(left.boolVal && right.boolVal));
-
-    // --- Aug: append element to tuple (or start a new tuple from nil) ---
-    // aug is used to build lists: nil aug x aug y = (x, y)
-    } else if (op == "aug") {
-        if (left.type == ValueType::NIL) {
-            // nil aug x  =>  (x)   (a 1-element tuple)
-            stack.push_back(StackValue::makeTuple({ right }));
-        } else if (left.type == ValueType::TUPLE) {
-            // (x,...) aug y  =>  (x,...,y)
-            std::vector<StackValue> elems = left.tupleElems;
-            elems.push_back(right);
-            stack.push_back(StackValue::makeTuple(std::move(elems)));
-        } else {
-            throw std::runtime_error("aug: left side must be nil or tuple");
-        }
-
-    } else {
-        throw std::runtime_error("rule6: unknown binary operator '" + op + "'");
-    }
+    stack.push_back(applyBinaryOp(node.value, left, right));
 }
 ```
 
----
-
-## 5. Step 2 — Rule 7: Unary Operators
-
-**Trigger:** `OPERATOR` on control where value is `neg` or `not`.
-**Action:** Pop one value, compute, push result.
+### Rule 7 — Unary Operators (Approach B path, still compiled)
 
 ```cpp
-// Rule 7: Unary operator on control (neg or not).
-// Pop one operand from stack, apply operator, push result.
 void CSEMachine::rule7_unaryOp(const CSENode& node) {
     StackValue operand = stack.back(); stack.pop_back();
-
-    if (node.value == "neg") {
-        // neg: arithmetic negation for integers
-        if (operand.type != ValueType::INTEGER)
-            throw std::runtime_error("neg: operand must be integer");
+    if (node.value == "neg")
         stack.push_back(StackValue::makeInt(-operand.intVal));
-
-    } else if (node.value == "not") {
-        // not: boolean negation
-        if (operand.type != ValueType::BOOL)
-            throw std::runtime_error("not: operand must be boolean");
+    else if (node.value == "not")
         stack.push_back(StackValue::makeBool(!operand.boolVal));
-
-    } else {
-        throw std::runtime_error("rule7: unknown unary operator '" + node.value + "'");
-    }
 }
 ```
 
----
-
-## 6. Step 3 — Rule 9: Tau (Tuple Construction)
-
-**Trigger:** `TAU(n)` on control — the `n` is stored in `node.value` (as a string number).
-**Action:** Pop `n` values from stack (top of stack = last element), form tuple, push.
-
-**Important:** The Flattener stores the tuple size as `node.value` for TAU nodes.
-See `Flattener.cpp` line: `val = std::to_string(childCount);`
+### Rule 9 — Tau / Tuple Construction (Approach B path, still compiled)
 
 ```cpp
-// Rule 9: Tau(n) on control.
-// Pop n values from the stack (they were pushed left-to-right,
-// so the last element is on top). Form a tuple and push it.
 void CSEMachine::rule9_tau(const CSENode& node) {
-    int n = std::stoi(node.value);  // number of elements in this tuple
-
-    if ((int)stack.size() < n)
-        throw std::runtime_error("Rule 9: not enough values on stack for tau(" +
-                                  std::to_string(n) + ")");
-
-    // Pop n values. Stack top = last element, so we collect in reverse.
+    int n = std::stoi(node.value);
     std::vector<StackValue> elems(n);
-    for (int i = n - 1; i >= 0; --i)  {
-        elems[i] = stack.back();
-        stack.pop_back();
+    for (int i = n - 1; i >= 0; --i) {
+        elems[i] = stack.back(); stack.pop_back();
     }
-
     stack.push_back(StackValue::makeTuple(std::move(elems)));
 }
 ```
 
----
-
-## 7. Step 4 — Rule 10: Tuple Indexing
-
-**Trigger:** `GAMMA` fires, rator is a `TUPLE`, rand is an `INTEGER` index.
-**Action:** Push the element at index `rand` (1-indexed per RPAL specification).
-
-**Source:** RPAL uses 1-based tuple indexing. Confirmed in RPAL language definition.
+### Rule 10 — Tuple Indexing (used in both approaches)
 
 ```cpp
-// Rule 10: GAMMA fires with a tuple as rator and integer index as rand.
-// RPAL tuple indexing is 1-based (first element = index 1).
 void CSEMachine::rule10_tupleIndex(StackValue& tuple, StackValue& idx) {
-    if (idx.type != ValueType::INTEGER)
-        throw std::runtime_error("Rule 10: tuple index must be an integer");
-
-    int i = idx.intVal;
-    if (i < 1 || i > (int)tuple.tupleElems.size())
-        throw std::runtime_error("Rule 10: tuple index " + std::to_string(i) +
-                                  " out of range (size=" +
-                                  std::to_string(tuple.tupleElems.size()) + ")");
-
-    // 1-indexed: element 1 is at position 0
+    int i = idx.intVal;  // 1-based
     stack.push_back(tuple.tupleElems[i - 1]);
 }
 ```
 
----
-
-## 8. Step 5 — Rule 13: Built-in Dispatch
-
-**Trigger:** `GAMMA` fires, rator is `BUILTIN` or `PARTIAL`.
-**Action:** Route to the correct built-in function based on the name.
-
-`Conc` is a **curried** built-in — it takes two arguments one at a time.
-When `Conc` is applied to first arg, a `PARTIAL` is pushed. When the `PARTIAL` is
-applied to second arg, the final result is computed.
+### Rule 13 — Built-in Dispatch (primary compute path in Approach A)
 
 ```cpp
-// Rule 13: GAMMA fires with a built-in function as rator.
-// Dispatch to the correct built-in handler.
-// Conc is curried: first application creates PARTIAL, second computes the result.
 void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
     const std::string& name = rator.strVal;
 
-    if (name == "Print" || name == "print") {
-        builtinPrint(rand);
-        stack.push_back(StackValue::makeDummy()); // Print returns dummy
-
-    } else if (name == "Order") {
-        stack.push_back(builtinOrder(rand));
-
-    } else if (name == "Stem") {
-        stack.push_back(builtinStem(rand));
-
-    } else if (name == "Stern") {
-        stack.push_back(builtinStern(rand));
-
-    } else if (name == "Conc") {
-        // Conc is curried: Conc s1 returns a PARTIAL waiting for s2
-        stack.push_back(StackValue::makePartial("Conc", rand));
-
-    } else if (rator.type == ValueType::PARTIAL && name == "Conc") {
-        // Second application of Conc: combine stored s1 with new s2
-        stack.push_back(builtinConc(*rator.partialArg, rand));
-
-    } else if (name == "Isinteger") {
-        stack.push_back(builtinIsinteger(rand));
-    } else if (name == "Isstring") {
-        stack.push_back(builtinIsstring(rand));
-    } else if (name == "Istruthvalue") {
-        stack.push_back(builtinIstruthvalue(rand));
-    } else if (name == "Istuple") {
-        stack.push_back(builtinIstuple(rand));
-    } else if (name == "Isfunction") {
-        stack.push_back(builtinIsfunction(rand));
-    } else if (name == "Arity") {
-        stack.push_back(builtinArity(rand));
-    } else if (name == "null") {
-        stack.push_back(builtinNull(rand));
-
-    } else {
-        throw std::runtime_error("rule13: unknown built-in '" + name + "'");
+    // PARTIAL: second application of binary ops, Conc, or third of Cond
+    if (rator.type == ValueType::PARTIAL) {
+        if (name == "Cond") {
+            if (rator.partialArg->type == ValueType::TUPLE) {
+                // Third: select thunk based on boolean
+                const StackValue& B      = rator.partialArg->tupleElems[0];
+                const StackValue& thunkT = rator.partialArg->tupleElems[1];
+                stack.push_back(B.boolVal ? thunkT : rand);
+            } else {
+                // Second: pack (B, thunkT) into tuple
+                stack.push_back(StackValue::makePartial("Cond",
+                    StackValue::makeTuple({ *rator.partialArg, rand })));
+            }
+        } else if (name == "Conc") {
+            stack.push_back(builtinConc(*rator.partialArg, rand));
+        } else {
+            stack.push_back(applyBinaryOp(name, *rator.partialArg, rand));
+        }
+        return;
     }
+
+    // First application of BUILTIN
+    if      (name == "Print" || name == "print") { builtinPrint(rand); stack.push_back(StackValue::makeDummy()); }
+    else if (name == "Order")       { stack.push_back(builtinOrder(rand)); }
+    else if (name == "Stem")        { stack.push_back(builtinStem(rand)); }
+    else if (name == "Stern")       { stack.push_back(builtinStern(rand)); }
+    else if (name == "Isinteger")   { stack.push_back(builtinIsinteger(rand)); }
+    else if (name == "Isstring")    { stack.push_back(builtinIsstring(rand)); }
+    else if (name == "Istruthvalue"){ stack.push_back(builtinIstruthvalue(rand)); }
+    else if (name == "Istuple")     { stack.push_back(builtinIstuple(rand)); }
+    else if (name == "Isfunction")  { stack.push_back(builtinIsfunction(rand)); }
+    else if (name == "Arity")       { stack.push_back(builtinArity(rand)); }
+    else if (name == "null")        { stack.push_back(builtinNull(rand)); }
+    else if (name == "Conc")        { stack.push_back(StackValue::makePartial("Conc", rand)); }
+    else if (name == "Cond")        { stack.push_back(StackValue::makePartial("Cond", rand)); }
+    else if (name == "neg")         { stack.push_back(StackValue::makeInt(-rand.intVal)); }
+    else if (name == "not")         { stack.push_back(StackValue::makeBool(!rand.boolVal)); }
+    // Binary ops: first application → PARTIAL
+    else { stack.push_back(StackValue::makePartial(name, rand)); }
 }
 ```
 
 ---
 
-## 9. Step 6 — All Built-in Implementations
+## 6. Built-in Implementations
 
-### `Print` — MOST CRITICAL
-
-**Output must match `rpal.exe` exactly.** Every character matters.
-
-Format rules (verified from RPAL specification and `rpal.exe` behaviour):
-- Integer: just the number, e.g. `5`
-- String: value without quotes, e.g. `hello world`
-- Boolean: `true` or `false`
-- Tuple: `(v1, v2, v3)` — comma, then one space, parentheses around all
-- Nil: `nil`
-- Dummy: `dummy`
-- Print adds a **newline** at the end (`\n`)
+### `Print`
 
 ```cpp
-// Prints value to stdout with a trailing newline.
-// Output format must match rpal.exe character-for-character.
 void CSEMachine::builtinPrint(const StackValue& arg) {
     std::cout << arg.toString() << std::endl;
 }
 ```
 
-> `toString()` is already implemented in `StackValue.cpp`.
-> Verify the tuple format `(v1, v2, v3)` matches `rpal.exe` using `diff`.
-> If there is a mismatch, fix `StackValue::toString()` — but discuss with 230094U first.
+Output format (must match `rpal.exe` exactly):
+- Integer: `5`
+- String: `hello world` (no quotes)
+- Boolean: `true` or `false`
+- Tuple: `(v1, v2, v3)` — parentheses, comma-space between elements
+- Nil: `nil`
+- Dummy: `dummy`
 
 ### `Order`
 
 ```cpp
-// Returns the number of elements in a tuple as an integer.
 StackValue CSEMachine::builtinOrder(const StackValue& arg) {
-    if (arg.type == ValueType::TUPLE)
-        return StackValue::makeInt((int)arg.tupleElems.size());
-    if (arg.type == ValueType::NIL)
-        return StackValue::makeInt(0);
+    if (arg.type == ValueType::TUPLE) return StackValue::makeInt((int)arg.tupleElems.size());
+    if (arg.type == ValueType::NIL)   return StackValue::makeInt(0);
     throw std::runtime_error("Order: argument must be a tuple");
 }
 ```
@@ -428,117 +437,59 @@ StackValue CSEMachine::builtinOrder(const StackValue& arg) {
 ### `Stem` and `Stern`
 
 ```cpp
-// Stem: returns the first character of a string as a 1-character string.
 StackValue CSEMachine::builtinStem(const StackValue& arg) {
-    if (arg.type != ValueType::STRING)
-        throw std::runtime_error("Stem: argument must be a string");
-    if (arg.strVal.empty())
-        throw std::runtime_error("Stem: cannot take stem of empty string");
     return StackValue::makeStr(std::string(1, arg.strVal[0]));
 }
 
-// Stern: returns the string without its first character.
 StackValue CSEMachine::builtinStern(const StackValue& arg) {
-    if (arg.type != ValueType::STRING)
-        throw std::runtime_error("Stern: argument must be a string");
-    if (arg.strVal.empty())
-        return StackValue::makeStr("");
-    return StackValue::makeStr(arg.strVal.substr(1));
+    return StackValue::makeStr(arg.strVal.empty() ? "" : arg.strVal.substr(1));
 }
 ```
 
 ### `Conc` — Curried String Concatenation
 
-`Conc` takes two arguments one at a time:
-- `Conc 'hello'` → PARTIAL (waiting for second arg)
-- `(Conc 'hello') 'world'` → `'helloworld'`
-
-The dispatch in Rule 13 handles this two-step application.
-This function is only called on the **second** application (when both args are available):
-
 ```cpp
-// Conc: concatenates two strings.
-// Called only with both arguments available (second application in curried call).
 StackValue CSEMachine::builtinConc(const StackValue& s1, const StackValue& s2) {
-    if (s1.type != ValueType::STRING || s2.type != ValueType::STRING)
-        throw std::runtime_error("Conc: both arguments must be strings");
     return StackValue::makeStr(s1.strVal + s2.strVal);
 }
 ```
 
-### Type-checking Built-ins
+### Type-Checking Built-ins
 
 ```cpp
-// Returns true if the value is an integer.
-StackValue CSEMachine::builtinIsinteger(const StackValue& arg) {
-    return StackValue::makeBool(arg.type == ValueType::INTEGER);
-}
+StackValue CSEMachine::builtinIsinteger  (const StackValue& arg) { return StackValue::makeBool(arg.type == ValueType::INTEGER); }
+StackValue CSEMachine::builtinIsstring   (const StackValue& arg) { return StackValue::makeBool(arg.type == ValueType::STRING); }
+StackValue CSEMachine::builtinIstruthvalue(const StackValue& arg){ return StackValue::makeBool(arg.type == ValueType::BOOL); }
+StackValue CSEMachine::builtinIstuple    (const StackValue& arg) { return StackValue::makeBool(arg.type == ValueType::TUPLE || arg.type == ValueType::NIL); }
+StackValue CSEMachine::builtinIsfunction (const StackValue& arg) { return StackValue::makeBool(arg.type == ValueType::CLOSURE || arg.type == ValueType::ETA || arg.type == ValueType::BUILTIN || arg.type == ValueType::PARTIAL); }
 
-// Returns true if the value is a string.
-StackValue CSEMachine::builtinIsstring(const StackValue& arg) {
-    return StackValue::makeBool(arg.type == ValueType::STRING);
-}
-
-// Returns true if the value is a boolean (true or false).
-StackValue CSEMachine::builtinIstruthvalue(const StackValue& arg) {
-    return StackValue::makeBool(arg.type == ValueType::BOOL);
-}
-
-// Returns true if the value is a tuple.
-StackValue CSEMachine::builtinIstuple(const StackValue& arg) {
-    return StackValue::makeBool(arg.type == ValueType::TUPLE ||
-                                 arg.type == ValueType::NIL);
-}
-
-// Returns true if the value is a function (closure or built-in).
-StackValue CSEMachine::builtinIsfunction(const StackValue& arg) {
-    return StackValue::makeBool(arg.type == ValueType::CLOSURE  ||
-                                 arg.type == ValueType::ETA      ||
-                                 arg.type == ValueType::BUILTIN  ||
-                                 arg.type == ValueType::PARTIAL);
-}
-
-// Arity: returns the number of bound parameters of a closure.
 StackValue CSEMachine::builtinArity(const StackValue& arg) {
     if (arg.type == ValueType::CLOSURE || arg.type == ValueType::ETA)
         return StackValue::makeInt((int)arg.boundVars.size());
     throw std::runtime_error("Arity: argument must be a function");
 }
 
-// null: returns true if the tuple is nil (empty).
 StackValue CSEMachine::builtinNull(const StackValue& arg) {
-    if (arg.type == ValueType::NIL)
-        return StackValue::makeBool(true);
-    if (arg.type == ValueType::TUPLE)
-        return StackValue::makeBool(arg.tupleElems.empty());
+    if (arg.type == ValueType::NIL)   return StackValue::makeBool(true);
+    if (arg.type == ValueType::TUPLE) return StackValue::makeBool(arg.tupleElems.empty());
     throw std::runtime_error("null: argument must be a tuple or nil");
 }
 ```
 
 ---
 
-## 10. Step 7 — Update `main.cpp`
-
-### 10a. Remove Debug Output (CRITICAL)
-
-The current `main.cpp` calls `printTokens(...)` and prints stage headers to `stdout`.
-This will break every single test case. Remove or comment out all the debug print
-stages. The only output to `stdout` must come from the `Print` built-in.
-
-Replace the entire `main()` function body with this clean version:
+## 7. `main.cpp` — Flag Support
 
 ```cpp
 int main(int argc, char* argv[]) {
-    // Parse optional flags and filename
-    bool printAST = false;
-    bool printST  = false;
+    bool printAST = false, printST = false;
     std::string filename;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "-ast")       printAST = true;
-        else if (arg == "-st")   printST  = true;
-        else                     filename = arg;
+        if      (arg == "-ast") printAST = true;
+        else if (arg == "-st")  printST  = true;
+        else                    filename = arg;
     }
 
     if (filename.empty()) {
@@ -547,46 +498,29 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        // Stage 1: Lexer
         Lexer lexer(filename);
         std::vector<Token> allTokens = lexer.tokenize();
 
-        // Stage 2: Screener
         Screener screener;
         std::vector<Token> cleanTokens = screener.filter(allTokens);
 
-        // Stage 3: Parser
         Parser parser(cleanTokens);
         ASTNode* ast = parser.parse();
 
-        // -ast flag: print AST to stdout and stop (matches rpal.exe -ast behaviour)
-        if (printAST) {
-            if (ast) ast->print();
-            delete ast;
-            return 0;
-        }
+        if (printAST) { if (ast) ast->print(); delete ast; return 0; }
 
-        // Stage 4: Standardizer
         Standardizer standardizer;
         ASTNode* st = standardizer.standardize(ast);
 
-        // -st flag: print ST to stdout and stop
-        if (printST) {
-            if (st) st->print();
-            delete ast;
-            return 0;
-        }
+        if (printST) { if (st) st->print(); delete ast; return 0; }
 
-        // Stage 5: Flattener
         Flattener flattener;
         flattener.flatten(st);
 
-        // Stage 6: CSE Machine
         CSEMachine cse(flattener.getDeltas());
         cse.evaluate();
 
         delete ast;
-
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
@@ -596,205 +530,127 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-**Also add this include at the top of `main.cpp`:**
-```cpp
-#include "cse_machine/CSEMachine.h"
-```
-
 ---
 
-## 11. Step 8 — Test Runner Script
+## 8. Test Cases
 
-Create `test_runner.sh` in the `rpal20/` directory. This runs all test cases
-and reports PASS/FAIL automatically (as recommended in Guide_v3 and by top GitHub projects).
+### Operator tests (Rule A1 / A2 — now via BUILTIN)
 
 ```bash
-#!/bin/bash
-# test_runner.sh — Automated diff testing for RPAL Interpreter
-# Usage:  bash test_runner.sh
-# Expects: rpal_test_programs/rpal_01, rpal_01.test, rpal_02, rpal_02.test, ...
+# test: arithmetic
+echo "Print (3 + 4)" | ./rpal20 /dev/stdin     # → 7
 
-PASS=0
-FAIL=0
+# test: comparison
+echo "Print (10 gr 5)" | ./rpal20 /dev/stdin    # → true
 
-for input in rpal_test_programs/rpal_*; do
-    # Extract the number from the filename (e.g. rpal_01 -> 01)
-    n=$(echo "$input" | grep -o '[0-9]*$')
-    expected="rpal_test_programs/output${n}.test"
+# test: unary neg
+echo "Print (neg 5)" | ./rpal20 /dev/stdin      # → -5
 
-    if [ ! -f "$expected" ]; then
-        echo "SKIP: $input (no expected output file)"
-        continue
-    fi
-
-    actual=$(./rpal20 "$input" 2>/dev/null)
-    expected_content=$(cat "$expected")
-
-    if [ "$actual" = "$expected_content" ]; then
-        echo "PASS: $input"
-        PASS=$((PASS + 1))
-    else
-        echo "FAIL: $input"
-        echo "  Expected: $(cat $expected)"
-        echo "  Got:      $actual"
-        FAIL=$((FAIL + 1))
-    fi
-done
-
-echo ""
-echo "Results: $PASS passed, $FAIL failed out of $((PASS + FAIL)) tests"
+# test: unary not
+echo "Print (not true)" | ./rpal20 /dev/stdin   # → false
 ```
 
-Make it executable:
+### Tuple tests (Rule A3 — tau via aug chain)
+
 ```bash
-chmod +x test_runner.sh
+./rpal20 Tests/test_tuple.rpal    # Print (1,2,3)  → (1, 2, 3)
 ```
 
-Run it:
+### Conditional test (Rule A4 — Cond thunk)
+
 ```bash
-make && bash test_runner.sh
+./rpal20 Tests/test_cond.rpal
+# let x = 5 in Print (x gr 3 -> 'big' | 'small')  → big
 ```
 
----
+### Tuple-pattern test (Rule A5 — fresh _T)
 
-## 12. Testing Your Rules
-
-### Build:
 ```bash
-make
+./rpal20 Tests/test_tuple_pattern.rpal
+# let add (x, y) = x + y in Print (add (3, 4))  → 7
 ```
 
-### Test Rule 6 (binary operators):
-```
-Print (3 + 4)
-```
-Expected: `7`
+### @ (infix) test
 
+```bash
+./rpal20 Tests/test_at_operator.rpal
+# let add x y = x + y in Print (3 @add 4)  → 7
 ```
-Print (10 gr 5)
-```
-Expected: `true`
 
-### Test Rule 7 (unary):
-```
-Print (neg 5)
-```
-Expected: `-5`
+### Official example from `ProgrammingProject.pdf`
 
-### Test Rule 9 (tau / tuple):
-```
-Print (1,2,3)
-```
-Expected: `(1, 2, 3)`
-
-### Test Rule 10 (tuple index):
-```
-let t = (10,20,30) in Print (t 2)
-```
-Expected: `20`
-
-### Test Rule 13 Print:
-```
-Print 'hello world'
-```
-Expected: `hello world`
-
-### Test Conc (curried):
-```
-Print (Conc 'foo' 'bar')
-```
-Expected: `foobar`
-
-### Test the official example from `ProgrammingProject.pdf`:
-```
+```rpal
 let Sum(A) = Psum (A,Order A)
              where rec Psum (T,N) = N eq 0 -> 0
                                   | Psum(T,N-1)+T N
 in Print ( Sum (1,2,3,4,5) )
 ```
+
 Expected: `15`
 
-This test uses: tuples (Rule 9), tuple Order (Rule 13), recursion (Rules 11/12 — 230094U),
-conditional (Rule 8 — 230094U), addition (Rule 6 — yours), Print (Rule 13 — yours).
-**This is the official example — it must work correctly.**
+Uses recursion (Rules 11/12 — 230094U), conditional (Cond thunk — Approach A),
+tuple (aug chain — Approach A), Order (Rule 13), addition (BUILTIN — Approach A),
+Print (Rule 13).
 
-### Test against `rpal.exe`:
+### Diff testing against `rpal.exe`
+
 ```bash
 ./rpal20 rpal_test_programs/rpal_01 > output.01
 diff output.01 rpal_test_programs/output01.test
+# zero output = perfect match
 ```
-Zero output = perfect match.
 
-### Run all tests automatically:
+### Automated test runner
+
 ```bash
 bash test_runner.sh
 ```
 
 ---
 
-## 13. ⚠️ Issues Found in `RPAL_Interpreter_Complete_Guide_v3.pdf`
+## 9. ⚠️ Issues in `RPAL_Interpreter_Complete_Guide_v3.pdf`
 
-The guide was written by us and has some points that conflict with the official
-`ProgrammingProject.pdf`. You must be aware of these:
-
-| Issue | Guide_v3 Says | Official Says | Action Required |
-|-------|--------------|---------------|-----------------|
-| Submission structure | zip named `230094U_230123K.zip` | Makefile at **root of zip, no nested dirs** | When submitting: zip the *contents* of `rpal20/`, not the folder itself |
-| Rule split | Section 7.1 has 230123K: 6,7,9,10,13 | README.md says 9-13 | **Follow Guide_v3 Section 7.1** (you own Rules 6,7 too) |
-| Debug output | Not warned about | stdout must match `rpal.exe` exactly | Remove ALL debug prints in main.cpp |
-| `-ast`/`-st` flags | "Not yet — should add" | Not required | Add them — they are needed for debugging and good practice |
-| Conc currying | Listed as built-in | N/A | Implement as curried (PARTIAL mechanism in StackValue) |
-| Print return value | Not specified | RPAL semantics: Print returns dummy | Always push `dummy` after `Print` executes |
+| Issue | Guide_v3 Says | Actual | Action |
+|-------|--------------|--------|--------|
+| Submission structure | zip `230094U_230123K.zip` | Makefile at root, no nesting | Zip *contents* of `rpal20/` |
+| Rule split | 230123K owns 6,7,9,10,13 | Same | Correct |
+| Debug output | Not warned | Breaks every test | Removed from `main.cpp` |
+| `-ast`/`-st` flags | "Add them" | Done | Implemented |
+| Conc currying | Listed | Implemented via PARTIAL | Done |
+| Cond | Not described | 3-arg curried via PARTIAL + tuple trick | Implemented |
 
 ---
 
-## 14. Final Submission Checklist
+## 10. Final Submission Checklist
 
 ### Code
-- [x] All 13 CSE rules implemented and working
-- [x] Compiles without any errors or warnings (`g++ -std=c++17 -Wall -Wextra`)
-- [x] All functions have at least a one-line comment
-- [x] No debug output printed to stdout (only `Print` built-in outputs)
+- [x] All 13 CSE rules implemented
+- [x] All Approach A standardizer rules (A1–A5) implemented
+- [x] Compiles without errors or warnings (`g++ -std=c++17 -Wall -Wextra`)
+- [x] No debug output to stdout
 - [x] `main.cpp` supports `-ast` and `-st` flags
-- [ ] `./rpal20 rpal_test_programs/rpal_01` produces correct output — **test against rpal.exe**
-- [ ] Zero `diff` output against `rpal.exe` for all test programs
+- [ ] `./rpal20 rpal_test_programs/rpal_01` output matches `rpal.exe` — **test with diff**
+- [ ] All official test programs pass
 
 ### Submission File
-- [ ] Zip contents of `rpal20/` directly — NOT the folder itself
-- [ ] After unzipping: `Makefile` is at the root (not inside a subfolder)
+- [ ] Zip contents of `rpal20/` directly (Makefile at root of zip)
 - [ ] Zip named exactly: `230094U_230123K.zip`
-- [ ] Test the zip: `unzip 230094U_230123K.zip -d test_extract && cd test_extract && make && ./rpal20 rpal_test_programs/rpal_01`
-- [ ] Submit to **Moodle** — not email
+- [ ] Test unzip: `unzip 230094U_230123K.zip -d test_extract && cd test_extract && make && ./rpal20 rpal_test_programs/rpal_01`
+- [ ] Submit to **Moodle**
 
 ### Report (`report/report.pdf`)
-- [ ] Both student names
-- [ ] Both student IDs (230094U and 230123K)
+- [ ] Both student names and IDs (230094U, 230123K)
 - [ ] Function prototypes for every function in every file
-- [ ] Program structure description (the 6-stage pipeline)
-- [ ] PDF format (not .docx)
-
-### Official Test Sequence (from `ProgrammingProject.pdf`)
-The graders will run exactly this — make sure it works:
-```bash
-make
-./rpal20 rpal_test_programs/rpal_01 > output.01
-diff output.01 rpal_test_programs/output01.test
-./rpal20 rpal_test_programs/rpal_02 > output.02
-diff output.02 rpal_test_programs/output02.test
-```
+- [ ] Program structure description (6-stage pipeline)
+- [ ] Approach A description and bonus explanation
+- [ ] PDF format
 
 ---
 
 ## References
 
 - `ProgrammingProject.pdf` — Official assignment (grading, submission rules)
-- `RPAL_Lex.pdf` — Authoritative lexical specification (operator symbols, keyword list)
-- `RPAL_Grammar.pdf` — Authoritative grammar (all 20 parse rules)
+- `RPAL_Lex.pdf` — Lexical specification
+- `RPAL_Grammar.pdf` — Grammar (all 20 parse rules)
 - `RPAL_Interpreter_Complete_Guide_v3.pdf` Section 7.1 — Workload distribution
-- cppreference — `std::string`, `substr`, `shared_ptr`:
-  https://en.cppreference.com/w/cpp/string/basic_string/substr
-  https://en.cppreference.com/w/cpp/memory/shared_ptr
-- RPAL SourceForge (official RPAL language reference):
-  https://rpal.sourceforge.net/
-- Landin, P.J. (1964). "The Mechanical Evaluation of Expressions."
-  *Computer Journal*, 6(4) — foundation paper for CSE/SECD machine theory
+- Landin, P.J. (1964). "The Mechanical Evaluation of Expressions." *Computer Journal*, 6(4)
