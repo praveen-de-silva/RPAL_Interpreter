@@ -185,7 +185,23 @@ ASTNode* Standardizer::standardize(ASTNode* node) {
     else if (node->type == "()") {
         standardizeEmptyParam(node);
     }
-    // All other nodes (gamma, +, -, *, etc.) need no transformation
+    else if (node->type == "+"  || node->type == "-"  || node->type == "*"  ||
+             node->type == "/"  || node->type == "**" || node->type == "aug" ||
+             node->type == "or" || node->type == "&"  || node->type == "gr"  ||
+             node->type == "ge" || node->type == "ls" || node->type == "le"  ||
+             node->type == "eq" || node->type == "ne") {
+        standardizeOp(node);
+    }
+    else if (node->type == "not" || node->type == "neg") {
+        standardizeUop(node);
+    }
+    else if (node->type == "tau") {
+        standardizeTau(node);
+    }
+    else if (node->type == "->") {
+        standardizeCond(node);
+    }
+    // All other nodes (gamma, IDENTIFIER, INTEGER, etc.) pass through
 
     return node;
 }
@@ -380,6 +396,10 @@ void Standardizer::standardizeFcnForm(ASTNode* node) {
     node->child      = f;
     f->sibling       = innermost;
     innermost->sibling = nullptr;
+
+    // Re-standardize the created lambda chain: if any Vb is a tuple-pattern
+    // (comma node), standardizeTuplePattern must be applied to it.
+    standardize(innermost);
 }
 
 // ── Rule 4: lambda (multiple Vb params) ──────────────────────────────────────
@@ -395,54 +415,49 @@ void Standardizer::standardizeFcnForm(ASTNode* node) {
 // nested single-parameter lambdas.
 // If only one parameter, no transformation needed.
 void Standardizer::standardizeLambda(ASTNode* node) {
-    // node is 'lambda'
-    // Count children: if only 2 (one param + body), nothing to do
     int numChildren = countChildren(node);
-    if (numChildren <= 2) {
-        // Single param lambda — already in standard form
-        return;
-    }
 
-    // Multiple params: x1, x2, ..., xn, E
-    // Collect all params and the body
-    std::vector<ASTNode*> params;
-    ASTNode* current = node->child;
-    ASTNode* body    = nullptr;
-
-    while (current != nullptr) {
-        if (current->sibling == nullptr) {
-            body = current;
-        } else {
-            params.push_back(current);
+    if (numChildren > 2) {
+        // ── Multiple params: collapse to nested single-param lambdas ──────────
+        std::vector<ASTNode*> params;
+        ASTNode* cur  = node->child;
+        ASTNode* body = nullptr;
+        while (cur != nullptr) {
+            if (cur->sibling == nullptr) body = cur;
+            else params.push_back(cur);
+            cur = cur->sibling;
         }
-        current = current->sibling;
+        if (body == nullptr || params.empty()) return;
+
+        for (auto& p : params) p->sibling = nullptr;
+        body->sibling = nullptr;
+
+        // Build from right to left; loop to i >= 1 so params[0] is NOT
+        // placed inside a newly created lambda (avoids a parent-child cycle).
+        ASTNode* innermost      = makeNode("lambda");
+        innermost->child        = params.back();
+        params.back()->sibling  = body;
+
+        for (int i = (int)params.size() - 2; i >= 1; i--) {
+            ASTNode* outer   = makeNode("lambda");
+            outer->child     = params[i];
+            params[i]->sibling = innermost;
+            innermost        = outer;
+        }
+
+        node->child         = params[0];
+        params[0]->sibling  = innermost;
+        innermost->sibling  = nullptr;
+
+        // Re-standardize inner lambdas: if any inner param is a tuple pattern
+        // (comma node) it needs to go through standardizeTuplePattern.
+        standardize(innermost);
     }
 
-    if (body == nullptr || params.empty()) {
-        return;
+    // ── Tuple-pattern bound variable: lambda(,(x,y,...), E) ──────────────────
+    if (node->child && node->child->type == ",") {
+        standardizeTuplePattern(node);
     }
-
-    // Detach all from siblings
-    for (auto& p : params) p->sibling = nullptr;
-    body->sibling = nullptr;
-
-    // Build nested lambdas from RIGHT to LEFT
-    ASTNode* innermost = makeNode("lambda");
-    innermost->child   = params.back();
-    params.back()->sibling = body;
-
-    for (int i = (int)params.size() - 2; i >= 0; i--) {
-        ASTNode* outer = makeNode("lambda");
-        outer->child   = params[i];
-        params[i]->sibling = innermost;
-        innermost = outer;
-    }
-
-    // Keep node as lambda but update its children
-    // node becomes: lambda x1 (lambda x2 (...))
-    node->child              = params[0];
-    params[0]->sibling       = innermost;
-    innermost->sibling       = nullptr;
 }
 
 // ── Rule 5: and ───────────────────────────────────────────────────────────────
@@ -515,6 +530,11 @@ void Standardizer::standardizeAnd(ASTNode* node) {
     node->child         = tauVars;
     tauVars->sibling    = tauVals;
     tauVals->sibling    = nullptr;
+
+    // The two tau nodes were just created here (not visited by the bottom-up
+    // traversal), so explicitly standardize them now.
+    standardize(tauVars);
+    standardize(tauVals);
 }
 
 // ── Rule 6: rec ───────────────────────────────────────────────────────────────
@@ -690,6 +710,201 @@ void Standardizer::standardizeAt(ASTNode* node) {
     innerGamma->sibling = R;
 }
 
+// ── Rule A4: -> (conditional) ─────────────────────────────────────────────────
+//
+// AST:              ST:
+//   ->               gamma
+//   ├── B             ├── gamma
+//   ├── T             │    ├── gamma
+//   └── E             │    │    ├── gamma
+//                     │    │    │    ├── IDENTIFIER(Cond)
+//                     │    │    │    └── B
+//                     │    │    └── lambda
+//                     │    │         ├── IDENTIFIER(dummy)
+//                     │    │         └── T
+//                     │    └── lambda
+//                     │         ├── IDENTIFIER(dummy)
+//                     │         └── E
+//                     └── nil
+//
+// Cond is a 3-arg curried built-in:
+//   (Cond B)          → partial1(Cond, B)
+//   (partial1 thunkT) → partial2(Cond, {B, thunkT})   [tuple trick]
+//   (partial2 thunkE) → thunkT if B else thunkE
+// The outermost gamma forces the selected thunk by applying it to nil.
+void Standardizer::standardizeCond(ASTNode* node) {
+    ASTNode* B = node->child;
+    ASTNode* T = B->sibling;
+    ASTNode* E = T->sibling;
+
+    B->sibling = nullptr;
+    T->sibling = nullptr;
+    E->sibling = nullptr;
+
+    // lambda(dummy, T) — thunk for true branch
+    ASTNode* dummyT  = makeNode("IDENTIFIER", "dummy");
+    ASTNode* thunkT  = makeNode("lambda");
+    thunkT->child    = dummyT;
+    dummyT->sibling  = T;
+
+    // lambda(dummy, E) — thunk for false branch
+    ASTNode* dummyE  = makeNode("IDENTIFIER", "dummy");
+    ASTNode* thunkE  = makeNode("lambda");
+    thunkE->child    = dummyE;
+    dummyE->sibling  = E;
+
+    // gamma(IDENTIFIER(Cond), B)
+    ASTNode* condId  = makeNode("IDENTIFIER", "Cond");
+    ASTNode* g1      = makeNode("gamma");
+    g1->child        = condId;
+    condId->sibling  = B;
+
+    // gamma(g1, thunkT)
+    ASTNode* g2      = makeNode("gamma");
+    g2->child        = g1;
+    g1->sibling      = thunkT;
+
+    // gamma(g2, thunkE)
+    ASTNode* g3      = makeNode("gamma");
+    g3->child        = g2;
+    g2->sibling      = thunkE;
+
+    // nil — dummy argument that forces the selected thunk
+    ASTNode* nilNode = makeNode("nil");
+
+    // Transform node in-place to outermost gamma(g3, nil)
+    node->type       = "gamma";
+    node->value      = "";
+    node->child      = g3;
+    g3->sibling      = nilNode;
+}
+
+// ── Rule A3: tau ──────────────────────────────────────────────────────────────
+//
+// tau(E1, E2, ..., En)  builds a tuple via aug starting from nil:
+//
+//   nil aug E1  =>  (E1)
+//   (E1) aug E2  =>  (E1, E2)
+//   ...
+//
+// In Approach A, aug is itself an IDENTIFIER built-in, so each step becomes:
+//
+//   gamma(gamma(IDENTIFIER("aug"), acc), E_i)
+//
+// Full example for tau(E1, E2, E3):
+//   gamma
+//    ├── gamma
+//    │    ├── IDENTIFIER(aug)
+//    │    └── gamma
+//    │         ├── gamma
+//    │         │    ├── IDENTIFIER(aug)
+//    │         │    └── gamma
+//    │         │         ├── gamma
+//    │         │         │    ├── IDENTIFIER(aug)
+//    │         │         │    └── nil
+//    │         │         └── E1
+//    │         └── E2
+//    └── E3
+void Standardizer::standardizeTau(ASTNode* node) {
+    // Detach and collect all children
+    std::vector<ASTNode*> elems;
+    ASTNode* child = node->child;
+    while (child) {
+        ASTNode* next = child->sibling;
+        child->sibling = nullptr;
+        elems.push_back(child);
+        child = next;
+    }
+    node->child = nullptr;
+
+    if (elems.empty()) {
+        // tau() → nil
+        node->type  = "nil";
+        node->value = "";
+        return;
+    }
+
+    // Start accumulator: nil
+    ASTNode* acc = makeNode("nil");
+
+    // Build aug gamma-chain for all but the last element as fresh nodes
+    for (int i = 0; i < (int)elems.size() - 1; ++i) {
+        ASTNode* augId  = makeNode("IDENTIFIER", "aug");
+        ASTNode* inner  = makeNode("gamma");
+        inner->child    = augId;
+        augId->sibling  = acc;
+
+        ASTNode* outer  = makeNode("gamma");
+        outer->child    = inner;
+        inner->sibling  = elems[i];
+
+        acc = outer;
+    }
+
+    // For the outermost step, transform node in-place (avoids an extra alloc + copy)
+    ASTNode* augId  = makeNode("IDENTIFIER", "aug");
+    ASTNode* inner  = makeNode("gamma");
+    inner->child    = augId;
+    augId->sibling  = acc;
+
+    node->type      = "gamma";
+    node->value     = "";
+    node->child     = inner;
+    inner->sibling  = elems.back();
+}
+
+// ── Rule A1: Binary operator ──────────────────────────────────────────────────
+//
+// AST:                      ST:
+//   Op                        gamma
+//    ├── E1                     ├── gamma
+//    └── E2                     │    ├── IDENTIFIER(Op)
+//                               │    └── E1
+//                               └── E2
+//
+// Op(E1,E2)  =>  gamma(gamma(IDENTIFIER(Op), E1), E2)
+void Standardizer::standardizeOp(ASTNode* node) {
+    ASTNode* E1 = node->child;
+    ASTNode* E2 = E1->sibling;
+
+    E1->sibling = nullptr;
+    E2->sibling = nullptr;
+
+    // IDENTIFIER node carrying the operator name (e.g. "+")
+    ASTNode* opId = makeNode("IDENTIFIER", node->type);
+
+    // Inner gamma: gamma(opId, E1)
+    ASTNode* innerGamma  = makeNode("gamma");
+    innerGamma->child    = opId;
+    opId->sibling        = E1;
+
+    // Transform node in-place to outer gamma: gamma(innerGamma, E2)
+    node->type           = "gamma";
+    node->value          = "";
+    node->child          = innerGamma;
+    innerGamma->sibling  = E2;
+}
+
+// ── Rule A2: Unary operator ───────────────────────────────────────────────────
+//
+// AST:                      ST:
+//   Uop                       gamma
+//    └── E                      ├── IDENTIFIER(Uop)
+//                               └── E
+//
+// Uop(E)  =>  gamma(IDENTIFIER(Uop), E)
+void Standardizer::standardizeUop(ASTNode* node) {
+    ASTNode* E = node->child;
+    E->sibling = nullptr;
+
+    ASTNode* opId = makeNode("IDENTIFIER", node->type);
+
+    node->type    = "gamma";
+    node->value   = "";
+    node->child   = opId;
+    opId->sibling = E;
+}
+
 // ── Rule 9: () zero-param Vb ──────────────────────────────────────────────────
 //
 // A '()' node appearing as a Vb in fcn_form or lambda means
@@ -699,4 +914,76 @@ void Standardizer::standardizeAt(ASTNode* node) {
 void Standardizer::standardizeEmptyParam(ASTNode* node) {
     node->type  = "IDENTIFIER";
     node->value = "dummy";
+}
+
+// ── Rule A5: lambda with comma (tuple-pattern) bound variable ─────────────────
+//
+// lambda(,(x,y,...), E)  =>  lambda(_T, let_chain)
+//
+// where let_chain (for vars x,y with Temp _T) is:
+//   gamma(lambda(x, gamma(lambda(y, E), gamma(_T,2))), gamma(_T,1))
+//
+// i.e. each variable is bound to the i-th element of the tuple argument.
+// A fresh _T identifier (guaranteed unique by a static counter) is used
+// to hold the incoming tuple without colliding with user-defined names.
+void Standardizer::standardizeTuplePattern(ASTNode* node) {
+    ASTNode* commaNode = node->child;        // ',' node holding var names
+    ASTNode* body      = commaNode->sibling; // already-standardized body
+    commaNode->sibling = nullptr;
+    body->sibling      = nullptr;
+
+    // Extract variable names from the comma list
+    std::vector<std::string> vars;
+    ASTNode* v = commaNode->child;
+    while (v) {
+        vars.push_back(v->value);
+        v = v->sibling;
+    }
+
+    // Fresh temp variable name; static counter ensures uniqueness across calls
+    static int tempCount = 0;
+    std::string tempName = "_T" + std::to_string(tempCount++);
+
+    // Build nested let-bindings from innermost (last var) to outermost (first var).
+    // For vars [x, y] and body E:
+    //   i=2: current = gamma(lambda(y, E),    gamma(_T, 2))
+    //   i=1: current = gamma(lambda(x, prev), gamma(_T, 1))
+    ASTNode* current = body;
+
+    for (int i = (int)vars.size(); i >= 1; --i) {
+        // gamma(_T, i)  — fetch i-th element from tuple
+        ASTNode* tempRef    = makeNode("IDENTIFIER", tempName);
+        ASTNode* idxNode    = makeNode("INTEGER",    std::to_string(i));
+        ASTNode* fetchGamma = makeNode("gamma");
+        fetchGamma->child   = tempRef;
+        tempRef->sibling    = idxNode;
+
+        // lambda(var_i, current_body)
+        ASTNode* varId   = makeNode("IDENTIFIER", vars[i - 1]);
+        ASTNode* lam     = makeNode("lambda");
+        lam->child       = varId;
+        varId->sibling   = current;
+
+        // gamma(lam, fetchGamma)  — the let-binding for var_i
+        ASTNode* letG    = makeNode("gamma");
+        letG->child      = lam;
+        lam->sibling     = fetchGamma;
+
+        current = letG;
+    }
+
+    // Transform node in-place: lambda(_T, current)
+    ASTNode* tempParam  = makeNode("IDENTIFIER", tempName);
+    node->child         = tempParam;
+    tempParam->sibling  = current;
+
+    // Delete the original comma node and its var-identifier children
+    // (we created fresh IDENTIFIER nodes above, so originals are unused)
+    ASTNode* toDelete = commaNode->child;
+    while (toDelete) {
+        ASTNode* next = toDelete->sibling;
+        delete toDelete;
+        toDelete = next;
+    }
+    delete commaNode;
 }
