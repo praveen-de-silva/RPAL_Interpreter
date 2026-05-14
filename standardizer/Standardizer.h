@@ -91,6 +91,28 @@ private:
     // f () = E  =>  = f (lambda dummy E)
     void standardizeEmptyParam(ASTNode* node);
 
+    // Rule A1: Binary operator  Op(E1, E2)  =>  gamma (gamma IDENTIFIER(Op) E1) E2
+    // Op in [+, -, *, /, **, aug, or, &, gr, ge, ls, le, eq, ne]
+    void standardizeOp(ASTNode* node);
+
+    // Rule A2: Unary operator  Uop(E)  =>  gamma IDENTIFIER(Uop) E
+    // Uop in [not, neg]
+    void standardizeUop(ASTNode* node);
+
+    // Rule A3: tau  =>  aug chain built from nil
+    // tau(E1,E2,...,En)  =>  gamma(gamma(IDENTIFIER(aug), ...gamma(gamma(IDENTIFIER(aug), nil), E1)...), En)
+    void standardizeTau(ASTNode* node);
+
+    // Rule A4: ->  (conditional)
+    // B -> T | E  =>  gamma(gamma(gamma(gamma(IDENTIFIER(Cond),B), lambda(dummy,T)), lambda(dummy,E)), nil)
+    // Cond is a 3-arg curried built-in that selects a thunk; nil forces the selected thunk.
+    void standardizeCond(ASTNode* node);
+
+    // Rule A5: lambda with comma (tuple-pattern) bound variable
+    // lambda(,(x,y,...), E)  =>  lambda(_T, gamma(lambda(x, gamma(lambda(y,...E...), gamma(_T,2))), gamma(_T,1)))
+    // A fresh _T variable extracts each element by index.
+    void standardizeTuplePattern(ASTNode* node);
+
 public:
     // Main standardize function.
     // Applies all transformation rules recursively to the entire AST.

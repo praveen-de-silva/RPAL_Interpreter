@@ -97,6 +97,13 @@ private:
     // --------------------------------------------------
     // Built-in function implementations  (230123K)
     // --------------------------------------------------
+
+    // Shared helper: apply a binary operator to two already-evaluated values.
+    // Used by rule6_binaryOp (Approach B) and rule13_builtin partial (Approach A).
+    StackValue applyBinaryOp(const std::string& op,
+                             const StackValue& left,
+                             const StackValue& right);
+
     void       builtinPrint(const StackValue& arg);
     StackValue builtinOrder(const StackValue& arg);
     StackValue builtinStem(const StackValue& arg);
