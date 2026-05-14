@@ -1,0 +1,4 @@
+let
+  f x = x + 1
+in
+  Print (f 4)

@@ -1,0 +1,4 @@
+let
+  rec sum n = n eq 0 -> 0 | n + sum (n - 1)
+in
+  Print (sum 5)

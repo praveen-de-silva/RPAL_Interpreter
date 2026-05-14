@@ -1,0 +1,15 @@
+let
+  logic_test = (true & false) or (not false)
+  and
+  arith_test = 2 ** 3 + 16 / 2 - 1
+  and
+  string_test = 'Hello RPAL'
+  and
+  rec factorial n = n eq 0 -> 1 | n * factorial (n - 1)
+in
+  Print (
+    factorial 5,
+    logic_test,
+    arith_test,
+    string_test
+  )

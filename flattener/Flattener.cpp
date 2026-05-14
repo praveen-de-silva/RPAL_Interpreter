@@ -58,12 +58,15 @@ void Flattener::flattenNode(ASTNode* node, int currentDelta) {
         deltas.push_back(std::vector<CSENode>());
         flattenNode(fNode, fDelta);
 
-        // Sequence: B, DELTA_T, DELTA_F, BETA
+        // Sequence: B, BETA, DELTA_T, DELTA_F
+        // pushDelta reverses this, so control pop order is: B..., BETA, DELTA_T, DELTA_F.
+        // BETA is popped first by the main switch (after B evaluates the condition),
+        // then rule8_beta pops DELTA_T and DELTA_F directly from control.
         flattenNode(bNode, currentDelta);
-        
+
+        deltas[currentDelta].push_back(CSENode(CSENodeType::BETA));
         deltas[currentDelta].push_back(CSENode(CSENodeType::DELTA, tDelta));
         deltas[currentDelta].push_back(CSENode(CSENodeType::DELTA, fDelta));
-        deltas[currentDelta].push_back(CSENode(CSENodeType::BETA));
     }
     else {
         // Other nodes: process children left-to-right, then add the node

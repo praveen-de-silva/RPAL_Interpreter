@@ -1,0 +1,4 @@
+let
+  rec factorial = fn n . n eq 0 -> 1 | n * factorial (n - 1)
+in
+  Print (factorial 5)
