@@ -298,37 +298,247 @@ void CSEMachine::rule12_eta(StackValue& eta, StackValue& rand) {
 }
 
 // ============================================================
-// STUBS — 230123K will implement these
+// Rules 6, 7, 9, 10, 13 and built-ins — 230123K
 // ============================================================
+
+// Rule 6: Binary operator on control.
+// Pop right operand (top of stack), then left. Compute and push result.
 void CSEMachine::rule6_binaryOp(const CSENode& node) {
-    (void)node;
-    throw std::runtime_error("rule6 not yet implemented by 230123K");
+    StackValue right = stack.back(); stack.pop_back();
+    StackValue left  = stack.back(); stack.pop_back();
+    const std::string& op = node.value;
+
+    if (op == "+") {
+        stack.push_back(StackValue::makeInt(left.intVal + right.intVal));
+    } else if (op == "-") {
+        stack.push_back(StackValue::makeInt(left.intVal - right.intVal));
+    } else if (op == "*") {
+        stack.push_back(StackValue::makeInt(left.intVal * right.intVal));
+    } else if (op == "/") {
+        if (right.intVal == 0)
+            throw std::runtime_error("Division by zero");
+        stack.push_back(StackValue::makeInt(left.intVal / right.intVal));
+    } else if (op == "**") {
+        int base = left.intVal, exp = right.intVal, result = 1;
+        if (exp < 0)
+            throw std::runtime_error("**: negative exponent not supported");
+        for (int i = 0; i < exp; ++i) result *= base;
+        stack.push_back(StackValue::makeInt(result));
+    } else if (op == "gr") {
+        stack.push_back(StackValue::makeBool(left.intVal > right.intVal));
+    } else if (op == "ge") {
+        stack.push_back(StackValue::makeBool(left.intVal >= right.intVal));
+    } else if (op == "ls") {
+        stack.push_back(StackValue::makeBool(left.intVal < right.intVal));
+    } else if (op == "le") {
+        stack.push_back(StackValue::makeBool(left.intVal <= right.intVal));
+    } else if (op == "eq") {
+        if (left.type == ValueType::INTEGER)
+            stack.push_back(StackValue::makeBool(left.intVal == right.intVal));
+        else if (left.type == ValueType::STRING)
+            stack.push_back(StackValue::makeBool(left.strVal == right.strVal));
+        else if (left.type == ValueType::BOOL)
+            stack.push_back(StackValue::makeBool(left.boolVal == right.boolVal));
+        else
+            throw std::runtime_error("eq: unsupported type");
+    } else if (op == "ne") {
+        if (left.type == ValueType::INTEGER)
+            stack.push_back(StackValue::makeBool(left.intVal != right.intVal));
+        else if (left.type == ValueType::STRING)
+            stack.push_back(StackValue::makeBool(left.strVal != right.strVal));
+        else if (left.type == ValueType::BOOL)
+            stack.push_back(StackValue::makeBool(left.boolVal != right.boolVal));
+        else
+            throw std::runtime_error("ne: unsupported type");
+    } else if (op == "or") {
+        stack.push_back(StackValue::makeBool(left.boolVal || right.boolVal));
+    } else if (op == "&") {
+        stack.push_back(StackValue::makeBool(left.boolVal && right.boolVal));
+    } else if (op == "aug") {
+        // nil aug x => (x), tuple aug x => append x to tuple
+        if (left.type == ValueType::NIL) {
+            stack.push_back(StackValue::makeTuple({ right }));
+        } else if (left.type == ValueType::TUPLE) {
+            std::vector<StackValue> elems = left.tupleElems;
+            elems.push_back(right);
+            stack.push_back(StackValue::makeTuple(std::move(elems)));
+        } else {
+            throw std::runtime_error("aug: left side must be nil or tuple");
+        }
+    } else {
+        throw std::runtime_error("rule6: unknown binary operator '" + op + "'");
+    }
 }
+
+// Rule 7: Unary operator on control (neg or not).
+// Pop one operand, apply operator, push result.
 void CSEMachine::rule7_unaryOp(const CSENode& node) {
-    (void)node;
-    throw std::runtime_error("rule7 not yet implemented by 230123K");
+    StackValue operand = stack.back(); stack.pop_back();
+
+    if (node.value == "neg") {
+        if (operand.type != ValueType::INTEGER)
+            throw std::runtime_error("neg: operand must be integer");
+        stack.push_back(StackValue::makeInt(-operand.intVal));
+    } else if (node.value == "not") {
+        if (operand.type != ValueType::BOOL)
+            throw std::runtime_error("not: operand must be boolean");
+        stack.push_back(StackValue::makeBool(!operand.boolVal));
+    } else {
+        throw std::runtime_error("rule7: unknown unary operator '" + node.value + "'");
+    }
 }
+
+// Rule 9: Tau(n) on control.
+// Pop n values from the stack and form a tuple (stack top = last element).
 void CSEMachine::rule9_tau(const CSENode& node) {
-    (void)node;
-    throw std::runtime_error("rule9 not yet implemented by 230123K");
+    int n = std::stoi(node.value);
+
+    if ((int)stack.size() < n)
+        throw std::runtime_error("Rule 9: not enough values on stack for tau(" +
+                                  std::to_string(n) + ")");
+
+    std::vector<StackValue> elems(n);
+    for (int i = n - 1; i >= 0; --i) {
+        elems[i] = stack.back();
+        stack.pop_back();
+    }
+    stack.push_back(StackValue::makeTuple(std::move(elems)));
 }
-void CSEMachine::rule10_tupleIndex(StackValue& rator, StackValue& idx) {
-    (void)rator; (void)idx;
-    throw std::runtime_error("rule10 not yet implemented by 230123K");
+
+// Rule 10: GAMMA fires with a tuple as rator and integer index as rand.
+// RPAL tuple indexing is 1-based.
+void CSEMachine::rule10_tupleIndex(StackValue& tuple, StackValue& idx) {
+    if (idx.type != ValueType::INTEGER)
+        throw std::runtime_error("Rule 10: tuple index must be an integer");
+
+    int i = idx.intVal;
+    if (i < 1 || i > (int)tuple.tupleElems.size())
+        throw std::runtime_error("Rule 10: tuple index " + std::to_string(i) +
+                                  " out of range (size=" +
+                                  std::to_string(tuple.tupleElems.size()) + ")");
+
+    stack.push_back(tuple.tupleElems[i - 1]);
 }
+
+// Rule 13: GAMMA fires with a built-in function as rator.
+// Dispatches to the correct built-in. Conc is curried via PARTIAL.
 void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
-    (void)rator; (void)rand;
-    throw std::runtime_error("rule13 not yet implemented by 230123K");
+    const std::string& name = rator.strVal;
+
+    if (name == "Print" || name == "print") {
+        builtinPrint(rand);
+        stack.push_back(StackValue::makeDummy());
+    } else if (name == "Order") {
+        stack.push_back(builtinOrder(rand));
+    } else if (name == "Stem") {
+        stack.push_back(builtinStem(rand));
+    } else if (name == "Stern") {
+        stack.push_back(builtinStern(rand));
+    } else if (name == "Conc") {
+        // First application: store s1 in a PARTIAL waiting for s2
+        stack.push_back(StackValue::makePartial("Conc", rand));
+    } else if (rator.type == ValueType::PARTIAL && name == "Conc") {
+        // Second application: both args available, concatenate
+        stack.push_back(builtinConc(*rator.partialArg, rand));
+    } else if (name == "Isinteger") {
+        stack.push_back(builtinIsinteger(rand));
+    } else if (name == "Isstring") {
+        stack.push_back(builtinIsstring(rand));
+    } else if (name == "Istruthvalue") {
+        stack.push_back(builtinIstruthvalue(rand));
+    } else if (name == "Istuple") {
+        stack.push_back(builtinIstuple(rand));
+    } else if (name == "Isfunction") {
+        stack.push_back(builtinIsfunction(rand));
+    } else if (name == "Arity") {
+        stack.push_back(builtinArity(rand));
+    } else if (name == "null") {
+        stack.push_back(builtinNull(rand));
+    } else {
+        throw std::runtime_error("rule13: unknown built-in '" + name + "'");
+    }
 }
-void       CSEMachine::builtinPrint(const StackValue& a)          { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinOrder(const StackValue& a)          { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinStem(const StackValue& a)           { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinStern(const StackValue& a)          { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinConc(const StackValue& a, const StackValue& b) { (void)a;(void)b; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinIsinteger(const StackValue& a)      { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinIsstring(const StackValue& a)       { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinIstruthvalue(const StackValue& a)   { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinIstuple(const StackValue& a)        { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinIsfunction(const StackValue& a)     { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinArity(const StackValue& a)          { (void)a; throw std::runtime_error("not impl"); }
-StackValue CSEMachine::builtinNull(const StackValue& a)           { (void)a; throw std::runtime_error("not impl"); }
+
+// Prints value to stdout with a trailing newline. Output must match rpal.exe exactly.
+void CSEMachine::builtinPrint(const StackValue& arg) {
+    std::cout << arg.toString() << std::endl;
+}
+
+// Returns the number of elements in a tuple (0 for nil).
+StackValue CSEMachine::builtinOrder(const StackValue& arg) {
+    if (arg.type == ValueType::TUPLE)
+        return StackValue::makeInt((int)arg.tupleElems.size());
+    if (arg.type == ValueType::NIL)
+        return StackValue::makeInt(0);
+    throw std::runtime_error("Order: argument must be a tuple");
+}
+
+// Returns the first character of a string as a 1-character string.
+StackValue CSEMachine::builtinStem(const StackValue& arg) {
+    if (arg.type != ValueType::STRING)
+        throw std::runtime_error("Stem: argument must be a string");
+    if (arg.strVal.empty())
+        throw std::runtime_error("Stem: cannot take stem of empty string");
+    return StackValue::makeStr(std::string(1, arg.strVal[0]));
+}
+
+// Returns the string without its first character.
+StackValue CSEMachine::builtinStern(const StackValue& arg) {
+    if (arg.type != ValueType::STRING)
+        throw std::runtime_error("Stern: argument must be a string");
+    if (arg.strVal.empty())
+        return StackValue::makeStr("");
+    return StackValue::makeStr(arg.strVal.substr(1));
+}
+
+// Concatenates two strings. Called on second application of curried Conc.
+StackValue CSEMachine::builtinConc(const StackValue& s1, const StackValue& s2) {
+    if (s1.type != ValueType::STRING || s2.type != ValueType::STRING)
+        throw std::runtime_error("Conc: both arguments must be strings");
+    return StackValue::makeStr(s1.strVal + s2.strVal);
+}
+
+// Returns true if the value is an integer.
+StackValue CSEMachine::builtinIsinteger(const StackValue& arg) {
+    return StackValue::makeBool(arg.type == ValueType::INTEGER);
+}
+
+// Returns true if the value is a string.
+StackValue CSEMachine::builtinIsstring(const StackValue& arg) {
+    return StackValue::makeBool(arg.type == ValueType::STRING);
+}
+
+// Returns true if the value is a boolean.
+StackValue CSEMachine::builtinIstruthvalue(const StackValue& arg) {
+    return StackValue::makeBool(arg.type == ValueType::BOOL);
+}
+
+// Returns true if the value is a tuple or nil.
+StackValue CSEMachine::builtinIstuple(const StackValue& arg) {
+    return StackValue::makeBool(arg.type == ValueType::TUPLE ||
+                                 arg.type == ValueType::NIL);
+}
+
+// Returns true if the value is a function (closure, eta, built-in, or partial).
+StackValue CSEMachine::builtinIsfunction(const StackValue& arg) {
+    return StackValue::makeBool(arg.type == ValueType::CLOSURE  ||
+                                 arg.type == ValueType::ETA      ||
+                                 arg.type == ValueType::BUILTIN  ||
+                                 arg.type == ValueType::PARTIAL);
+}
+
+// Returns the number of bound parameters of a closure.
+StackValue CSEMachine::builtinArity(const StackValue& arg) {
+    if (arg.type == ValueType::CLOSURE || arg.type == ValueType::ETA)
+        return StackValue::makeInt((int)arg.boundVars.size());
+    throw std::runtime_error("Arity: argument must be a function");
+}
+
+// Returns true if the argument is nil or an empty tuple.
+StackValue CSEMachine::builtinNull(const StackValue& arg) {
+    if (arg.type == ValueType::NIL)
+        return StackValue::makeBool(true);
+    if (arg.type == ValueType::TUPLE)
+        return StackValue::makeBool(arg.tupleElems.empty());
+    throw std::runtime_error("null: argument must be a tuple or nil");
+}

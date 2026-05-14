@@ -11,44 +11,65 @@
 // Usage:  ./rpal20 <filename>
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        std::cerr << "Usage: ./rpal20 <filename>\n";
+    bool printAST = false;
+    bool printST  = false;
+    std::string filename;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "-ast")      printAST = true;
+        else if (arg == "-st")  printST  = true;
+        else                    filename = arg;
+    }
+
+    if (filename.empty()) {
+        std::cerr << "Usage: ./rpal20 [-ast] [-st] <filename>\n";
         return 1;
     }
- 
-    std::string filename = argv[1];
 
     try {
-        // -- Stage 1: Lexer --
+        // Stage 1: Lexer
         Lexer lexer(filename);
         std::vector<Token> allTokens = lexer.tokenize();
-     
-        // -- Stage 2: Screener --
+
+        // Stage 2: Screener
         Screener screener;
         std::vector<Token> cleanTokens = screener.filter(allTokens);
-     
-        // -- Stage 3: Parser --
+
+        // Stage 3: Parser
         Parser parser(cleanTokens);
         ASTNode* ast = parser.parse();
-        
-        //-- Stage 4: Standardizer --
+
+        if (printAST) {
+            if (ast) ast->print();
+            delete ast;
+            return 0;
+        }
+
+        // Stage 4: Standardizer
         Standardizer standardizer;
         ASTNode* st = standardizer.standardize(ast);
 
-        //-- Stage 5: Flattener --
+        if (printST) {
+            if (st) st->print();
+            delete ast;
+            return 0;
+        }
+
+        // Stage 5: Flattener
         Flattener flattener;
         flattener.flatten(st);
 
-        // -- Stage 6: CSE Machine --
+        // Stage 6: CSE Machine
         CSEMachine cse(flattener.getDeltas());
         cse.evaluate();
 
-        delete ast; // Clean up memory
+        delete ast;
 
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
- 
+
     return 0;
 }
