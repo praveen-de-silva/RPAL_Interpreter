@@ -82,7 +82,15 @@ private:
  
     // Rule 7: within  =>  gamma (lambda x2 E2) (gamma (lambda x1 E1) E0)
     void standardizeWithin(ASTNode* node);
- 
+
+    // Rule 8: @ (infix application)
+    // E @n R  =>  gamma (gamma n E) R
+    void standardizeAt(ASTNode* node);
+
+    // Rule 9: () (zero-param Vb in fcn_form / lambda)
+    // f () = E  =>  = f (lambda dummy E)
+    void standardizeEmptyParam(ASTNode* node);
+
 public:
     // Main standardize function.
     // Applies all transformation rules recursively to the entire AST.

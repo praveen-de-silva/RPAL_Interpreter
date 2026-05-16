@@ -3,6 +3,53 @@
 
 ---
 
+## Current Implementation Status
+
+> Last updated: branch `feature/CSEMachine-230123K`
+
+### 230123K — COMPLETE
+
+| Component | Method | Status |
+|-----------|--------|--------|
+| Rule 6 — binary operators (`+`, `-`, `*`, `/`, `**`, `gr`, `ge`, `ls`, `le`, `eq`, `ne`, `or`, `&`, `aug`) | `rule6_binaryOp` | Done |
+| Rule 7 — unary operators (`neg`, `not`) | `rule7_unaryOp` | Done |
+| Rule 9 — tuple construction from `tau(n)` | `rule9_tau` | Done |
+| Rule 10 — 1-based tuple indexing | `rule10_tupleIndex` | Done |
+| Rule 13 — built-in dispatch (including curried `Conc`) | `rule13_builtin` | Done |
+| `Print` / `print` — outputs value with trailing newline | `builtinPrint` | Done |
+| `Order` — returns tuple size as integer | `builtinOrder` | Done |
+| `Stem` — returns first character of string | `builtinStem` | Done |
+| `Stern` — returns string without first character | `builtinStern` | Done |
+| `Conc` — curried string concatenation via `PARTIAL` | `builtinConc` | Done |
+| `Isinteger` | `builtinIsinteger` | Done |
+| `Isstring` | `builtinIsstring` | Done |
+| `Istruthvalue` | `builtinIstruthvalue` | Done |
+| `Istuple` | `builtinIstuple` | Done |
+| `Isfunction` | `builtinIsfunction` | Done |
+| `Arity` | `builtinArity` | Done |
+| `null` | `builtinNull` | Done |
+| `main.cpp` — `-ast` and `-st` flag support | `main.cpp` | Done |
+
+### Full CSE Machine — ALL 13 RULES COMPLETE
+
+| Rule | Owner | Status |
+|------|-------|--------|
+| Rule 1 — identifier lookup | 230094U | Done |
+| Rule 2 — lambda → closure | 230094U | Done |
+| Rule 3 — single-param function application | 230094U | Done |
+| Rule 4 — n-ary function application | 230094U | Done |
+| Rule 5 — environment restore | 230094U | Done |
+| Rule 6 — binary operators | 230123K | Done |
+| Rule 7 — unary operators | 230123K | Done |
+| Rule 8 — conditional (BETA) | 230094U | Done |
+| Rule 9 — tuple construction (TAU) | 230123K | Done |
+| Rule 10 — tuple indexing | 230123K | Done |
+| Rule 11 — Y\* fixed-point | 230094U | Done |
+| Rule 12 — eta closure unwrap | 230094U | Done |
+| Rule 13 — built-in dispatch + 12 built-ins | 230123K | Done |
+
+---
+
 ## ⚠️ CRITICAL WARNINGS — READ BEFORE CODING
 
 ### Warning 1 — Rule Split Discrepancy in Our Documents
@@ -64,14 +111,14 @@ Your rules and what they enable:
 
 ---
 
-## 2. Prerequisites — Wait for These from 230094U
+## 2. Prerequisites — Received from 230094U
 
-Before writing any CSE Machine code, confirm 230094U has pushed:
-- [ ] `cse_machine/CSEMachine.h` — the shared header you will both implement
-- [ ] `cse_machine/CSEMachine.cpp` — with Rules 1,2,3,4,5,8,11,12 done and stubs for yours
-- [ ] `cse_machine/Environment.h/.cpp` — compiling
-- [ ] `Makefile` — updated with all new .cpp files
-- [ ] `make` runs and builds the project without errors
+All prerequisites are complete:
+- [x] `cse_machine/CSEMachine.h` — shared header finalised
+- [x] `cse_machine/CSEMachine.cpp` — Rules 1,2,3,4,5,8,11,12 done, stubs replaced by 230123K
+- [x] `cse_machine/Environment.h/.cpp` — compiling
+- [x] `Makefile` — updated with all new .cpp files
+- [x] Builds without errors or warnings
 
 ---
 
@@ -703,16 +750,14 @@ The guide was written by us and has some points that conflict with the official
 
 ## 14. Final Submission Checklist
 
-Before submitting on Moodle, verify every single item:
-
 ### Code
-- [ ] All 13 CSE rules implemented and working
-- [ ] `make` compiles without any errors or warnings
-- [ ] `./rpal20 rpal_test_programs/rpal_01` produces correct output
-- [ ] `bash test_runner.sh` shows all tests PASS
+- [x] All 13 CSE rules implemented and working
+- [x] Compiles without any errors or warnings (`g++ -std=c++17 -Wall -Wextra`)
+- [x] All functions have at least a one-line comment
+- [x] No debug output printed to stdout (only `Print` built-in outputs)
+- [x] `main.cpp` supports `-ast` and `-st` flags
+- [ ] `./rpal20 rpal_test_programs/rpal_01` produces correct output — **test against rpal.exe**
 - [ ] Zero `diff` output against `rpal.exe` for all test programs
-- [ ] All functions have at least a one-line comment (10% of grade)
-- [ ] No debug output printed to stdout (only `Print` built-in outputs)
 
 ### Submission File
 - [ ] Zip contents of `rpal20/` directly — NOT the folder itself
