@@ -18,19 +18,11 @@ CSEMachine::CSEMachine(const std::vector<std::vector<CSENode>>& deltaStructures)
     envTable.push_back(Environment(0, -1));
 
     // Pre-bind all built-in function names in e_0.
-    // Approach A: operators (+, -, not, etc.) also live here so that
-    // the standardizer can emit them as IDENTIFIER nodes that Rule 1 resolves.
+    // When Rule 1 looks up "Print", it finds a BUILTIN value here.
     const std::vector<std::string> builtins = {
         "Print", "print", "Order", "Stem", "Stern", "Conc",
         "Isinteger", "Isstring", "Istruthvalue", "Istuple",
-        "Isfunction", "Arity", "null",
-        // binary operators
-        "+", "-", "*", "/", "**", "aug", "or", "&",
-        "gr", "ge", "ls", "le", "eq", "ne",
-        // unary operators
-        "not", "neg",
-        // conditional (3-arg curried)
-        "Cond"
+        "Isfunction", "Arity", "null"
     };
     for (const auto& name : builtins)
         envTable[0].bind(name, StackValue::makeBuiltin(name));
@@ -322,70 +314,73 @@ void CSEMachine::rule12_eta(StackValue& eta, StackValue& rand) {
 // Rules 6, 7, 9, 10, 13 and built-ins — 230123K
 // ============================================================
 
-// Shared helper: apply a named binary operator to two evaluated values.
-// Called by rule6_binaryOp (Approach B OPERATOR nodes) and
-// rule13_builtin partial second-application (Approach A IDENTIFIER nodes).
-StackValue CSEMachine::applyBinaryOp(const std::string& op,
-                                      const StackValue& left,
-                                      const StackValue& right) {
-    if (op == "+")  return StackValue::makeInt(left.intVal + right.intVal);
-    if (op == "-")  return StackValue::makeInt(left.intVal - right.intVal);
-    if (op == "*")  return StackValue::makeInt(left.intVal * right.intVal);
-    if (op == "/") {
-        if (right.intVal == 0) throw std::runtime_error("Division by zero");
-        return StackValue::makeInt(left.intVal / right.intVal);
-    }
-    if (op == "**") {
-        int base = left.intVal, exp = right.intVal, result = 1;
-        if (exp < 0) throw std::runtime_error("**: negative exponent not supported");
-        for (int i = 0; i < exp; ++i) result *= base;
-        return StackValue::makeInt(result);
-    }
-    if (op == "gr") return StackValue::makeBool(left.intVal >  right.intVal);
-    if (op == "ge") return StackValue::makeBool(left.intVal >= right.intVal);
-    if (op == "ls") return StackValue::makeBool(left.intVal <  right.intVal);
-    if (op == "le") return StackValue::makeBool(left.intVal <= right.intVal);
-    if (op == "or") return StackValue::makeBool(left.boolVal || right.boolVal);
-    if (op == "&")  return StackValue::makeBool(left.boolVal && right.boolVal);
-    if (op == "eq") {
-        if (left.type == ValueType::INTEGER)
-            return StackValue::makeBool(left.intVal  == right.intVal);
-        if (left.type == ValueType::STRING)
-            return StackValue::makeBool(left.strVal  == right.strVal);
-        if (left.type == ValueType::BOOL)
-            return StackValue::makeBool(left.boolVal == right.boolVal);
-        throw std::runtime_error("eq: unsupported type");
-    }
-    if (op == "ne") {
-        if (left.type == ValueType::INTEGER)
-            return StackValue::makeBool(left.intVal  != right.intVal);
-        if (left.type == ValueType::STRING)
-            return StackValue::makeBool(left.strVal  != right.strVal);
-        if (left.type == ValueType::BOOL)
-            return StackValue::makeBool(left.boolVal != right.boolVal);
-        throw std::runtime_error("ne: unsupported type");
-    }
-    if (op == "aug") {
-        if (left.type == ValueType::NIL)
-            return StackValue::makeTuple({ right });
-        if (left.type == ValueType::TUPLE) {
-            std::vector<StackValue> elems = left.tupleElems;
-            elems.push_back(right);
-            return StackValue::makeTuple(std::move(elems));
-        }
-        throw std::runtime_error("aug: left side must be nil or tuple");
-    }
-    throw std::runtime_error("applyBinaryOp: unknown operator '" + op + "'");
-}
-
-// Rule 6: Binary operator node on control (Approach B path).
-// Operators arrive here only when the flattener emits them as OPERATOR nodes
-// (i.e., when the standardizer does NOT transform them). Both approaches are
-// supported: Approach B uses this rule; Approach A uses rule13_builtin instead.
+// Rule 6: Binary operator on control.
+// Pop right operand (top of stack), then left. Compute and push result.
 void CSEMachine::rule6_binaryOp(const CSENode& node) {
     StackValue right = stack.back(); stack.pop_back();
     StackValue left  = stack.back(); stack.pop_back();
-    stack.push_back(applyBinaryOp(node.value, left, right));
+    const std::string& op = node.value;
+
+    if (op == "+") {
+        stack.push_back(StackValue::makeInt(left.intVal + right.intVal));
+    } else if (op == "-") {
+        stack.push_back(StackValue::makeInt(left.intVal - right.intVal));
+    } else if (op == "*") {
+        stack.push_back(StackValue::makeInt(left.intVal * right.intVal));
+    } else if (op == "/") {
+        if (right.intVal == 0)
+            throw std::runtime_error("Division by zero");
+        stack.push_back(StackValue::makeInt(left.intVal / right.intVal));
+    } else if (op == "**") {
+        int base = left.intVal, exp = right.intVal, result = 1;
+        if (exp < 0)
+            throw std::runtime_error("**: negative exponent not supported");
+        for (int i = 0; i < exp; ++i) result *= base;
+        stack.push_back(StackValue::makeInt(result));
+    } else if (op == "gr") {
+        stack.push_back(StackValue::makeBool(left.intVal > right.intVal));
+    } else if (op == "ge") {
+        stack.push_back(StackValue::makeBool(left.intVal >= right.intVal));
+    } else if (op == "ls") {
+        stack.push_back(StackValue::makeBool(left.intVal < right.intVal));
+    } else if (op == "le") {
+        stack.push_back(StackValue::makeBool(left.intVal <= right.intVal));
+    } else if (op == "eq") {
+        if (left.type == ValueType::INTEGER)
+            stack.push_back(StackValue::makeBool(left.intVal == right.intVal));
+        else if (left.type == ValueType::STRING)
+            stack.push_back(StackValue::makeBool(left.strVal == right.strVal));
+        else if (left.type == ValueType::BOOL)
+            stack.push_back(StackValue::makeBool(left.boolVal == right.boolVal));
+        else
+            throw std::runtime_error("eq: unsupported type");
+    } else if (op == "ne") {
+        if (left.type == ValueType::INTEGER)
+            stack.push_back(StackValue::makeBool(left.intVal != right.intVal));
+        else if (left.type == ValueType::STRING)
+            stack.push_back(StackValue::makeBool(left.strVal != right.strVal));
+        else if (left.type == ValueType::BOOL)
+            stack.push_back(StackValue::makeBool(left.boolVal != right.boolVal));
+        else
+            throw std::runtime_error("ne: unsupported type");
+    } else if (op == "or") {
+        stack.push_back(StackValue::makeBool(left.boolVal || right.boolVal));
+    } else if (op == "&") {
+        stack.push_back(StackValue::makeBool(left.boolVal && right.boolVal));
+    } else if (op == "aug") {
+        // nil aug x => (x), tuple aug x => append x to tuple
+        if (left.type == ValueType::NIL) {
+            stack.push_back(StackValue::makeTuple({ right }));
+        } else if (left.type == ValueType::TUPLE) {
+            std::vector<StackValue> elems = left.tupleElems;
+            elems.push_back(right);
+            stack.push_back(StackValue::makeTuple(std::move(elems)));
+        } else {
+            throw std::runtime_error("aug: left side must be nil or tuple");
+        }
+    } else {
+        throw std::runtime_error("rule6: unknown binary operator '" + op + "'");
+    }
 }
 
 // Rule 7: Unary operator on control (neg or not).
@@ -438,12 +433,17 @@ void CSEMachine::rule10_tupleIndex(StackValue& tuple, StackValue& idx) {
     stack.push_back(tuple.tupleElems[i - 1]);
 }
 
-// Rule 13: GAMMA fires with a built-in or partial as rator.
-// PARTIAL second-application handles all curried built-ins (Conc + Approach A operators).
+// Rule 13: GAMMA fires with a built-in function as rator.
+// Dispatches to the correct built-in. Conc is curried via PARTIAL.
 void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
     const std::string& name = rator.strVal;
 
-    if (name == "Print" || name == "print") {
+    // PARTIAL check must come FIRST — PARTIAL also stores name in strVal,
+    // so checking name == "Conc" first would shadow the second-application case.
+    if (rator.type == ValueType::PARTIAL && name == "Conc") {
+        // Second application: both args available, concatenate
+        stack.push_back(builtinConc(*rator.partialArg, rand));
+    } else if (name == "Print" || name == "print") {
         builtinPrint(rand);
         stack.push_back(StackValue::makeDummy());
     } else if (name == "Order") {
@@ -453,6 +453,7 @@ void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
     } else if (name == "Stern") {
         stack.push_back(builtinStern(rand));
     } else if (name == "Conc") {
+        // First application: store s1 in a PARTIAL waiting for s2
         stack.push_back(StackValue::makePartial("Conc", rand));
     } else if (name == "Isinteger") {
         stack.push_back(builtinIsinteger(rand));
@@ -474,8 +475,6 @@ void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
 }
 
 // Prints value to stdout with a trailing newline. Output must match rpal.exe exactly.
-// Strings are stored internally with their surrounding single quotes (e.g. "'hello'").
-// When printed standalone, the quotes are stripped. Inside a tuple they stay (see toString).
 void CSEMachine::builtinPrint(const StackValue& arg) {
     if (arg.type == ValueType::STRING) {
         const std::string& s = arg.strVal;
@@ -488,6 +487,12 @@ void CSEMachine::builtinPrint(const StackValue& arg) {
     }
 }
 
+static std::string stripQuotes(const std::string& s) {
+    if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
+        return s.substr(1, s.size() - 2);
+    return s;
+}
+
 // Returns the number of elements in a tuple (0 for nil).
 StackValue CSEMachine::builtinOrder(const StackValue& arg) {
     if (arg.type == ValueType::TUPLE)
@@ -497,15 +502,7 @@ StackValue CSEMachine::builtinOrder(const StackValue& arg) {
     throw std::runtime_error("Order: argument must be a tuple");
 }
 
-// Strips the surrounding single quotes that the lexer wraps around every string
-// (e.g. the token 'hello' is stored as "'hello'" internally).
-static std::string stripQuotes(const std::string& s) {
-    if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
-        return s.substr(1, s.size() - 2);
-    return s;
-}
-
-// Returns the first character of a string's content as a 1-character string.
+// Returns the first character of a string's content as a 1-char quoted string.
 StackValue CSEMachine::builtinStem(const StackValue& arg) {
     if (arg.type != ValueType::STRING)
         throw std::runtime_error("Stem: argument must be a string");
@@ -515,7 +512,7 @@ StackValue CSEMachine::builtinStem(const StackValue& arg) {
     return StackValue::makeStr("'" + std::string(1, content[0]) + "'");
 }
 
-// Returns the string content after its first character.
+// Returns the string content after its first character, re-wrapped in quotes.
 StackValue CSEMachine::builtinStern(const StackValue& arg) {
     if (arg.type != ValueType::STRING)
         throw std::runtime_error("Stern: argument must be a string");
@@ -523,7 +520,7 @@ StackValue CSEMachine::builtinStern(const StackValue& arg) {
     return StackValue::makeStr("'" + (content.empty() ? "" : content.substr(1)) + "'");
 }
 
-// Concatenates two strings (stripping and re-adding surrounding quotes).
+// Concatenates two strings, stripping and re-wrapping quotes.
 StackValue CSEMachine::builtinConc(const StackValue& s1, const StackValue& s2) {
     if (s1.type != ValueType::STRING || s2.type != ValueType::STRING)
         throw std::runtime_error("Conc: both arguments must be strings");
