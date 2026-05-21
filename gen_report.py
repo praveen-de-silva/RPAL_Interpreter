@@ -558,9 +558,94 @@ for title, code, expected in tests:
 doc.add_page_break()
 
 # ════════════════════════════════════════════════════════════════════════════════
-#  6. DIVISION OF RESPONSIBILITIES
+#  6. DESIGN DECISION: APPROACH A vs APPROACH B
 # ════════════════════════════════════════════════════════════════════════════════
-heading("6. Division of Responsibilities")
+heading("6. Design Decision – Approach A vs Approach B")
+
+para(
+    "During development the team implemented and evaluated two distinct approaches "
+    "for transforming and evaluating RPAL programs. The final submission uses Approach B."
+)
+
+heading("Approach A – Full Standardization", level=2)
+para(
+    "In Approach A every RPAL construct — including primitive operators (+, -, *, /, "
+    "comparisons) and conditionals (->|) — was converted into gamma (function application) "
+    "nodes by an extended standardizer. Operators were pre-bound as built-in functions in "
+    "the primitive environment e₀, and the conditional operator was rewritten as a curried "
+    "Cond function. The CSE machine therefore only needed to handle gamma applications "
+    "and lambda closures; all primitives were treated uniformly as higher-order functions."
+)
+para("Pipeline:", bold=True)
+code_block(
+    "Source → Lexer → Screener → Parser\n"
+    "       → Full Standardizer  (let, where, rec, @, and, within,\n"
+    "                              + operators → gamma, -> → Cond gamma)\n"
+    "       → Flattener → CSE Machine  (only Rules 1–5, 11, 12 needed)"
+)
+para("Drawbacks of Approach A:", bold=True)
+p = doc.add_paragraph(style='List Bullet')
+p.add_run("Performance overhead: every arithmetic operation required creating a new environment "
+          "and performing name lookup — the same cost as a full function call.").font.size = Pt(11)
+p = doc.add_paragraph(style='List Bullet')
+p.add_run("Standardizer complexity: the standardizer needed extra rules to rewrite each operator "
+          "and the conditional into nested gamma nodes, making it significantly larger.").font.size = Pt(11)
+p = doc.add_paragraph(style='List Bullet')
+p.add_run("Non-standard: deviates from the formal RPAL CSE machine specification, "
+          "which explicitly defines Rules 6–10 for primitives.").font.size = Pt(11)
+doc.add_paragraph()
+
+heading("Approach B – Partial Standardization with Native CSE Rules  (chosen)", level=2)
+para(
+    "Approach B follows the formal RPAL CSE machine specification. The standardizer "
+    "handles only the structural transformations (let, where, rec, fcn_form, lambda, "
+    "and, within, @, empty-param). Operators remain as OPERATOR nodes in the delta "
+    "arrays and conditionals produce BETA nodes. The CSE machine evaluates these "
+    "directly using dedicated native rules."
+)
+para("Pipeline:", bold=True)
+code_block(
+    "Source → Lexer → Screener → Parser\n"
+    "       → Standardizer  (structural rules only: let/where/rec/fcn_form/\n"
+    "                         lambda/and/within/@/empty-param — 9 rules)\n"
+    "       → Flattener  (lambdas → delta arrays, ->| → BETA+DELTA nodes)\n"
+    "       → CSE Machine  (all 13 rules: operators via Rule 6/7,\n"
+    "                        conditionals via Rule 8, tuples via Rule 9/10)"
+)
+para("Advantages of Approach B:", bold=True)
+p = doc.add_paragraph(style='List Bullet')
+p.add_run("Efficiency: arithmetic and boolean operations are O(1) stack operations "
+          "— no environment creation, no name lookup.").font.size = Pt(11)
+p = doc.add_paragraph(style='List Bullet')
+p.add_run("Simpler standardizer: only 9 structural rules; no need to encode operator "
+          "semantics in the tree.").font.size = Pt(11)
+p = doc.add_paragraph(style='List Bullet')
+p.add_run("Standard conformance: directly implements the 13-rule RPAL CSE machine "
+          "as specified in the course material.").font.size = Pt(11)
+p = doc.add_paragraph(style='List Bullet')
+p.add_run("Clean separation of concerns: the standardizer handles syntax-level "
+          "transformations; the CSE machine handles semantic evaluation.").font.size = Pt(11)
+
+doc.add_paragraph()
+table(
+    ["Aspect", "Approach A (Full Standardization)", "Approach B (Chosen)"],
+    [
+        ["Operator handling",    "Rewritten to gamma in standardizer",   "Native Rule 6/7 in CSE Machine"],
+        ["Conditional handling", "Rewritten to Cond gamma",              "Native Rule 8 (BETA node)"],
+        ["Standardizer size",    "Large (many extra rules)",             "Compact (9 structural rules)"],
+        ["CSE Machine rules",    "Rules 1–5, 11, 12 only",              "All 13 rules"],
+        ["Operator cost",        "Full function-call overhead",          "O(1) stack operation"],
+        ["Spec conformance",     "Deviates from formal spec",           "Follows formal spec exactly"],
+    ],
+    col_widths=[4.0, 5.5, 5.5]
+)
+
+doc.add_page_break()
+
+# ════════════════════════════════════════════════════════════════════════════════
+#  7. DIVISION OF RESPONSIBILITIES
+# ════════════════════════════════════════════════════════════════════════════════
+heading("7. Division of Responsibilities")
 
 table(
     ["Component", "230094U (Bula)", "230123K (Praveen)"],
