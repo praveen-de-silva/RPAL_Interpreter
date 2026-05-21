@@ -1,24 +1,18 @@
-// ============================================================
 // CSEMachine.cpp
-// Author: 230094U (Rules 1,2,3,4,5,8,11,12) + 230123K (Rules 6,7,9,10,13)
-// ============================================================
+// Evaluates the flattened delta arrays using the Control-Stack-Environment model.
+// Rules 1,2,3,4,5,8,11,12 implemented by 230094U
+// Rules 6,7,9,10,13 and built-ins implemented by 230123K
+
 #include "CSEMachine.h"
 #include <stdexcept>
 #include <iostream>
 
-// ------------------------------------------------------------------
-// Constructor
-// Creates e_0 (primitive environment) and pre-binds all built-in names.
-// Built-ins are bound as BUILTIN values so Rule 1 lookup finds them.
-// ------------------------------------------------------------------
+// Set up e0 (the initial environment) and pre-bind all built-in names.
 CSEMachine::CSEMachine(const std::vector<std::vector<CSENode>>& deltaStructures)
     : deltas(deltaStructures), currentEnv(0)
 {
-    // e_0 is the primitive environment (index 0, no parent: -1)
-    envTable.push_back(Environment(0, -1));
+    envTable.push_back(Environment(0, -1)); // e0 has no parent
 
-    // Pre-bind all built-in function names in e_0.
-    // When Rule 1 looks up "Print", it finds a BUILTIN value here.
     const std::vector<std::string> builtins = {
         "Print", "print", "Order", "Stem", "Stern", "Conc",
         "Isinteger", "Isstring", "Istruthvalue", "Istuple",
@@ -28,15 +22,14 @@ CSEMachine::CSEMachine(const std::vector<std::vector<CSENode>>& deltaStructures)
         envTable[0].bind(name, StackValue::makeBuiltin(name));
 }
 
-// Creates a new child environment; registers it in envTable.
+// Create a new environment as a child of parentIdx
 int CSEMachine::newEnv(int parentIdx) {
     int idx = (int)envTable.size();
     envTable.push_back(Environment(idx, parentIdx));
     return idx;
 }
 
-// Walks up the environment chain starting at envIdx.
-// Throws if the name is not found anywhere in the chain.
+// Search the environment chain for a name; throw if not found
 StackValue CSEMachine::lookup(const std::string& name, int envIdx) const {
     int idx = envIdx;
     while (idx != -1) {
@@ -48,28 +41,23 @@ StackValue CSEMachine::lookup(const std::string& name, int envIdx) const {
     throw std::runtime_error("Unbound identifier: '" + name + "'");
 }
 
-// Pushes delta[idx] contents onto control in reverse order so that
-// the first node of delta[idx] is popped (processed) first.
+// Push the contents of delta[idx] onto control in reverse so execution order is preserved
 void CSEMachine::pushDelta(int idx) {
     const auto& d = deltas[idx];
     for (int i = (int)d.size() - 1; i >= 0; --i)
         control.push_back(d[i]);
 }
 
-// Runs the CSE Machine until control is empty.
-// Strategy: pop one CSENode from control, match it to the correct rule.
+// Main evaluation loop — pops one control node at a time and applies the matching rule
 void CSEMachine::evaluate() {
-    // Initial state: push delta[0] contents onto control.
-    // No initial env marker — e_0 is permanent.
-    pushDelta(0);
+    pushDelta(0); // start with delta[0]
 
     while (!control.empty()) {
         CSENode top = control.back();
         control.pop_back();
 
         switch (top.type) {
-
-            // --- Literal values: push straight to stack ---
+            // literals go straight to the stack
             case CSENodeType::INTEGER:
                 stack.push_back(StackValue::makeInt(std::stoi(top.value)));
                 break;
@@ -89,167 +77,117 @@ void CSEMachine::evaluate() {
                 stack.push_back(StackValue::makeDummy());
                 break;
             case CSENodeType::YSTAR:
-                // Y* is not a literal — push as a special built-in value.
-                // When GAMMA fires next it will trigger Rule 11.
                 stack.push_back(StackValue::makeBuiltin("Y*"));
                 break;
 
-            // --- Rules ---
-            case CSENodeType::IDENTIFIER:
-                rule1_name(top);      // Rule 1
-                break;
-            case CSENodeType::LAMBDA:
-                rule2_lambda(top);    // Rule 2
-                break;
-            case CSENodeType::GAMMA:
-                rule3_4_gamma();      // Rules 3/4 + 11/12/10/13 dispatched inside
-                break;
-            case CSENodeType::ENV:
-                rule5_envMarker(top); // Rule 5
-                break;
-            case CSENodeType::BETA:
-                rule8_beta();         // Rule 8
-                break;
-            case CSENodeType::TAU:
-                rule9_tau(top);       // Rule 9 — 230123K implements
-                break;
+            case CSENodeType::IDENTIFIER: rule1_name(top);      break;
+            case CSENodeType::LAMBDA:     rule2_lambda(top);     break;
+            case CSENodeType::GAMMA:      rule3_4_gamma();       break;
+            case CSENodeType::ENV:        rule5_envMarker(top);  break;
+            case CSENodeType::BETA:       rule8_beta();          break;
+            case CSENodeType::TAU:        rule9_tau(top);        break;
             case CSENodeType::OPERATOR:
                 if (top.value == "neg" || top.value == "not")
-                    rule7_unaryOp(top);   // Rule 7 — 230123K implements
+                    rule7_unaryOp(top);
                 else
-                    rule6_binaryOp(top);  // Rule 6 — 230123K implements
+                    rule6_binaryOp(top);
                 break;
 
             default:
-                throw std::runtime_error(
-                    "evaluate(): unhandled CSENode type in control");
+                throw std::runtime_error("evaluate(): unhandled control node type");
         }
     }
 }
 
-// Rule 1: Name on control.
-// Look up the identifier in the environment chain and push its value to stack.
+// Rule 1: identifier on control — look it up in the environment and push the value
 void CSEMachine::rule1_name(const CSENode& node) {
     stack.push_back(lookup(node.value, currentEnv));
 }
 
-// Rule 2: Lambda on control.
-// A lambda becomes a closure: { deltaIndex, boundVars, current env }.
-// The current env is "captured" so the closure can access variables
-// that exist at the point of definition (lexical scoping).
+// Rule 2: lambda on control — capture current env and push a closure
 void CSEMachine::rule2_lambda(const CSENode& node) {
     stack.push_back(StackValue::makeClosure(
-        node.deltaIndex,   // delta[deltaIndex] is the lambda body
-        node.boundVars,    // parameter name(s) to bind on application
-        currentEnv         // lexical environment captured right now
+        node.deltaIndex,
+        node.boundVars,
+        currentEnv  // lexical scoping: capture the env where the lambda is defined
     ));
 }
 
-// Rules 3 & 4: Gamma on control.
-// Pops rand (argument) and rator (function) from stack.
-// Dispatches to correct sub-rule based on rator type.
+// Rules 3 & 4: gamma on control — function application
+// Rule 3: single-param closure, Rule 4: multi-param closure (tuple argument)
 void CSEMachine::rule3_4_gamma() {
-    // Stack order: rand is top, rator is one below
     StackValue rand  = stack.back(); stack.pop_back();
     StackValue rator = stack.back(); stack.pop_back();
 
     if (rator.type == ValueType::CLOSURE) {
-        // -----------------------------------------------
-        // Rule 3: rator is a single-param closure
-        // Rule 4: rator is an n-ary (multi-param) closure
-        // -----------------------------------------------
-
-        // Create new environment as child of the closure's captured env.
-        // This is lexical scoping — the new env inherits from where the
-        // lambda was DEFINED, not where it is CALLED.
+        // new environment inherits from where the lambda was defined (lexical scope)
         int e_new = newEnv(rator.envIndex);
 
         if (rator.boundVars.size() == 1) {
-            // Rule 3: single parameter — bind it directly
             envTable[e_new].bind(rator.boundVars[0], rand);
         } else {
-            // Rule 4: multiple parameters — rand must be a tuple
+            // multi-param: rand must be a tuple of the right size
             if (rand.type != ValueType::TUPLE ||
                 rand.tupleElems.size() != rator.boundVars.size())
-                throw std::runtime_error(
-                    "Rule 4: argument count does not match lambda parameter count");
+                throw std::runtime_error("Rule 4: wrong number of arguments");
             for (size_t i = 0; i < rator.boundVars.size(); ++i)
                 envTable[e_new].bind(rator.boundVars[i], rand.tupleElems[i]);
         }
 
-        // Push ENV marker so Rule 5 can restore the environment after the call.
+        // push env marker so Rule 5 can restore the caller's environment when done
         CSENode envMarker(CSENodeType::ENV);
-        envMarker.envIndex = currentEnv;   // save current env to restore later
+        envMarker.envIndex = currentEnv;
         control.push_back(envMarker);
 
-        // Push the lambda body (delta) onto control.
         pushDelta(rator.deltaIndex);
-
-        // Switch to the new environment.
         currentEnv = e_new;
 
     } else if (rator.type == ValueType::ETA) {
-        // Rule 12: recursive closure — delegate
         rule12_eta(rator, rand);
 
     } else if (rator.type == ValueType::BUILTIN && rator.strVal == "Y*") {
-        // Rule 11: Y* applied to a lambda — delegate
         rule11_ystar(rand);
 
     } else if (rator.type == ValueType::TUPLE) {
-        // Rule 10: tuple indexing — 230123K implements
         rule10_tupleIndex(rator, rand);
 
-    } else if (rator.type == ValueType::BUILTIN ||
-               rator.type == ValueType::PARTIAL) {
-        // Rule 13: built-in function — 230123K implements
+    } else if (rator.type == ValueType::BUILTIN || rator.type == ValueType::PARTIAL) {
         rule13_builtin(rator, rand);
 
     } else {
-        throw std::runtime_error("GAMMA: rator is not a callable value");
+        throw std::runtime_error("GAMMA: rator is not callable");
     }
 }
 
-// Rule 5: Environment marker on control.
-// When a function body finishes executing, this marker triggers env restore.
-// The value on top of stack is the function's return value — it must be
-// preserved across the environment switch.
+// Rule 5: env marker on control — restore the environment after a function returns
 void CSEMachine::rule5_envMarker(const CSENode& node) {
     StackValue result = stack.back();
     stack.pop_back();
-    currentEnv = node.envIndex;   // restore to env saved when we entered this call
+    currentEnv = node.envIndex;
     stack.push_back(result);
 }
 
-// Rule 8: Beta (conditional) on control.
-// At this point control top is DELTA(then), then DELTA(else) below it.
-// Pop the boolean from stack and push the correct branch delta onto control.
+// Rule 8: beta (conditional) — pop condition, push the correct branch delta
 void CSEMachine::rule8_beta() {
-    // The two branch deltas are on top of control now (then is top, else below)
     CSENode thenDelta = control.back(); control.pop_back();
     CSENode elseDelta = control.back(); control.pop_back();
 
-    // The condition was already evaluated — pop it from the value stack
     StackValue cond = stack.back(); stack.pop_back();
 
     if (cond.type != ValueType::BOOL)
-        throw std::runtime_error("Rule 8: condition is not a boolean");
+        throw std::runtime_error("Rule 8: condition must be boolean");
 
     if (cond.boolVal)
-        pushDelta(thenDelta.deltaIndex);   // push then-branch
+        pushDelta(thenDelta.deltaIndex);
     else
-        pushDelta(elseDelta.deltaIndex);   // push else-branch
+        pushDelta(elseDelta.deltaIndex);
 }
 
-// Rule 11: GAMMA fires with Y* as rator and a lambda closure as rand.
-// Wrap the lambda in an eta closure. The eta closure represents the
-// fixed point: when applied later, it will feed itself as the recursive argument.
-// (rand is the lambda that was on top of stack)
+// Rule 11: Y* applied to a lambda — wrap it in an eta (recursive) closure
 void CSEMachine::rule11_ystar(StackValue& lambda) {
     if (lambda.type != ValueType::CLOSURE)
-        throw std::runtime_error("Rule 11: Y* must be applied to a lambda closure");
+        throw std::runtime_error("Rule 11: Y* must be applied to a closure");
 
-    // Create eta closure with same delta/vars/env as the lambda
     stack.push_back(StackValue::makeEta(
         lambda.deltaIndex,
         lambda.boundVars,
@@ -257,21 +195,9 @@ void CSEMachine::rule11_ystar(StackValue& lambda) {
     ));
 }
 
-// Rule 12: GAMMA fires with an eta closure as rator.
-//
-// Bug-free approach: instead of pushing a LAMBDA node onto control and relying
-// on stack ordering (which reverses rator/rand), we peek directly into
-// delta[eta.deltaIndex] to find the inner lambda and apply it to rand inline.
-//
-// Structure produced by the standardizer for  rec f x = E :
-//   eta(delta_outer, [f], e)  where delta_outer = [ LAMBDA(delta_inner, [x]) ]
-//
-// What we do here:
-//   1. e_rec  = child of eta.envIndex,  bind f -> eta   (enables self-recursion)
-//   2. e_call = child of e_rec,         bind x -> rand  (actual argument)
-//   3. Push ENV marker, push delta_inner body, switch to e_call
+// Rule 12: gamma applied to an eta closure — one step of recursive unwinding
+// Creates two environments: one binds f->eta (self-reference), one binds the argument
 void CSEMachine::rule12_eta(StackValue& eta, StackValue& rand) {
-    // Step 1: environment for the recursive binding  (simulates outer lambda applied to eta)
     int e_rec = newEnv(eta.envIndex);
     if (!eta.boundVars.empty())
         envTable[e_rec].bind(eta.boundVars[0],
@@ -279,43 +205,32 @@ void CSEMachine::rule12_eta(StackValue& eta, StackValue& rand) {
                                                  eta.boundVars,
                                                  eta.envIndex));
 
-    // Step 2: find the inner lambda in delta[eta.deltaIndex]
-    // For any valid RPAL rec definition the first (and only) node in that delta
-    // is a LAMBDA carrying the actual parameter(s) and the body's delta index.
     const auto& outerBody = deltas[eta.deltaIndex];
     if (outerBody.empty() || outerBody[0].type != CSENodeType::LAMBDA)
-        throw std::runtime_error("rule12: eta's delta does not begin with LAMBDA");
+        throw std::runtime_error("rule12: eta delta does not start with LAMBDA");
 
     const CSENode& innerLambda = outerBody[0];
 
-    // Step 3: environment for the actual call  (simulates inner lambda applied to rand)
     int e_call = newEnv(e_rec);
     if (innerLambda.boundVars.size() == 1) {
         envTable[e_call].bind(innerLambda.boundVars[0], rand);
     } else {
         if (rand.type != ValueType::TUPLE ||
             rand.tupleElems.size() != innerLambda.boundVars.size())
-            throw std::runtime_error("rule12: argument count does not match parameter count");
+            throw std::runtime_error("rule12: argument count mismatch");
         for (size_t i = 0; i < innerLambda.boundVars.size(); ++i)
             envTable[e_call].bind(innerLambda.boundVars[i], rand.tupleElems[i]);
     }
 
-    // Push ENV marker so Rule 5 restores the caller's environment when the body finishes
     CSENode envMarker(CSENodeType::ENV);
     envMarker.envIndex = currentEnv;
     control.push_back(envMarker);
 
-    // Push the function body and switch into the call environment
     pushDelta(innerLambda.deltaIndex);
     currentEnv = e_call;
 }
 
-// ============================================================
-// Rules 6, 7, 9, 10, 13 and built-ins — 230123K
-// ============================================================
-
-// Rule 6: Binary operator on control.
-// Pop right operand (top of stack), then left. Compute and push result.
+// Rule 6: binary operator node on control — pop two operands and compute result
 void CSEMachine::rule6_binaryOp(const CSENode& node) {
     StackValue right = stack.back(); stack.pop_back();
     StackValue left  = stack.back(); stack.pop_back();
@@ -333,8 +248,7 @@ void CSEMachine::rule6_binaryOp(const CSENode& node) {
         stack.push_back(StackValue::makeInt(left.intVal / right.intVal));
     } else if (op == "**") {
         int base = left.intVal, exp = right.intVal, result = 1;
-        if (exp < 0)
-            throw std::runtime_error("**: negative exponent not supported");
+        if (exp < 0) throw std::runtime_error("**: negative exponent not supported");
         for (int i = 0; i < exp; ++i) result *= base;
         stack.push_back(StackValue::makeInt(result));
     } else if (op == "gr") {
@@ -345,6 +259,10 @@ void CSEMachine::rule6_binaryOp(const CSENode& node) {
         stack.push_back(StackValue::makeBool(left.intVal < right.intVal));
     } else if (op == "le") {
         stack.push_back(StackValue::makeBool(left.intVal <= right.intVal));
+    } else if (op == "or") {
+        stack.push_back(StackValue::makeBool(left.boolVal || right.boolVal));
+    } else if (op == "&") {
+        stack.push_back(StackValue::makeBool(left.boolVal && right.boolVal));
     } else if (op == "eq") {
         if (left.type == ValueType::INTEGER)
             stack.push_back(StackValue::makeBool(left.intVal == right.intVal));
@@ -363,12 +281,7 @@ void CSEMachine::rule6_binaryOp(const CSENode& node) {
             stack.push_back(StackValue::makeBool(left.boolVal != right.boolVal));
         else
             throw std::runtime_error("ne: unsupported type");
-    } else if (op == "or") {
-        stack.push_back(StackValue::makeBool(left.boolVal || right.boolVal));
-    } else if (op == "&") {
-        stack.push_back(StackValue::makeBool(left.boolVal && right.boolVal));
     } else if (op == "aug") {
-        // nil aug x => (x), tuple aug x => append x to tuple
         if (left.type == ValueType::NIL) {
             stack.push_back(StackValue::makeTuple({ right }));
         } else if (left.type == ValueType::TUPLE) {
@@ -376,15 +289,14 @@ void CSEMachine::rule6_binaryOp(const CSENode& node) {
             elems.push_back(right);
             stack.push_back(StackValue::makeTuple(std::move(elems)));
         } else {
-            throw std::runtime_error("aug: left side must be nil or tuple");
+            throw std::runtime_error("aug: left operand must be nil or tuple");
         }
     } else {
-        throw std::runtime_error("rule6: unknown binary operator '" + op + "'");
+        throw std::runtime_error("rule6: unknown operator '" + op + "'");
     }
 }
 
-// Rule 7: Unary operator on control (neg or not).
-// Pop one operand, apply operator, push result.
+// Rule 7: unary operator (neg or not) — pop one value and apply
 void CSEMachine::rule7_unaryOp(const CSENode& node) {
     StackValue operand = stack.back(); stack.pop_back();
 
@@ -401,14 +313,12 @@ void CSEMachine::rule7_unaryOp(const CSENode& node) {
     }
 }
 
-// Rule 9: Tau(n) on control.
-// Pop n values from the stack and form a tuple (stack top = last element).
+// Rule 9: tau(n) — collect n stack values into a tuple
 void CSEMachine::rule9_tau(const CSENode& node) {
     int n = std::stoi(node.value);
 
     if ((int)stack.size() < n)
-        throw std::runtime_error("Rule 9: not enough values on stack for tau(" +
-                                  std::to_string(n) + ")");
+        throw std::runtime_error("Rule 9: stack underflow for tau(" + std::to_string(n) + ")");
 
     std::vector<StackValue> elems(n);
     for (int i = n - 1; i >= 0; --i) {
@@ -418,30 +328,24 @@ void CSEMachine::rule9_tau(const CSENode& node) {
     stack.push_back(StackValue::makeTuple(std::move(elems)));
 }
 
-// Rule 10: GAMMA fires with a tuple as rator and integer index as rand.
-// RPAL tuple indexing is 1-based.
+// Rule 10: tuple selection — rator is a tuple, rand is a 1-based index
 void CSEMachine::rule10_tupleIndex(StackValue& tuple, StackValue& idx) {
     if (idx.type != ValueType::INTEGER)
-        throw std::runtime_error("Rule 10: tuple index must be an integer");
+        throw std::runtime_error("Rule 10: index must be integer");
 
     int i = idx.intVal;
     if (i < 1 || i > (int)tuple.tupleElems.size())
-        throw std::runtime_error("Rule 10: tuple index " + std::to_string(i) +
-                                  " out of range (size=" +
-                                  std::to_string(tuple.tupleElems.size()) + ")");
+        throw std::runtime_error("Rule 10: index out of range");
 
     stack.push_back(tuple.tupleElems[i - 1]);
 }
 
-// Rule 13: GAMMA fires with a built-in function as rator.
-// Dispatches to the correct built-in. Conc is curried via PARTIAL.
+// Rule 13: built-in function application
+// PARTIAL check must come before name=="Conc" since partial also has strVal=="Conc"
 void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
     const std::string& name = rator.strVal;
 
-    // PARTIAL check must come FIRST — PARTIAL also stores name in strVal,
-    // so checking name == "Conc" first would shadow the second-application case.
     if (rator.type == ValueType::PARTIAL && name == "Conc") {
-        // Second application: both args available, concatenate
         stack.push_back(builtinConc(*rator.partialArg, rand));
     } else if (name == "Print" || name == "print") {
         builtinPrint(rand);
@@ -453,8 +357,7 @@ void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
     } else if (name == "Stern") {
         stack.push_back(builtinStern(rand));
     } else if (name == "Conc") {
-        // First application: store s1 in a PARTIAL waiting for s2
-        stack.push_back(StackValue::makePartial("Conc", rand));
+        stack.push_back(StackValue::makePartial("Conc", rand)); // first arg stored, wait for second
     } else if (name == "Isinteger") {
         stack.push_back(builtinIsinteger(rand));
     } else if (name == "Isstring") {
@@ -474,7 +377,8 @@ void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
     }
 }
 
-// Prints value to stdout with a trailing newline. Output must match rpal.exe exactly.
+// Strings are stored internally with surrounding single quotes (e.g. "'hello'").
+// When printing a standalone string we strip them; inside tuples they stay.
 void CSEMachine::builtinPrint(const StackValue& arg) {
     if (arg.type == ValueType::STRING) {
         const std::string& s = arg.strVal;
@@ -487,32 +391,28 @@ void CSEMachine::builtinPrint(const StackValue& arg) {
     }
 }
 
+// Helper: remove the surrounding single quotes from an internal string value
 static std::string stripQuotes(const std::string& s) {
     if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
         return s.substr(1, s.size() - 2);
     return s;
 }
 
-// Returns the number of elements in a tuple (0 for nil).
 StackValue CSEMachine::builtinOrder(const StackValue& arg) {
-    if (arg.type == ValueType::TUPLE)
-        return StackValue::makeInt((int)arg.tupleElems.size());
-    if (arg.type == ValueType::NIL)
-        return StackValue::makeInt(0);
+    if (arg.type == ValueType::TUPLE) return StackValue::makeInt((int)arg.tupleElems.size());
+    if (arg.type == ValueType::NIL)   return StackValue::makeInt(0);
     throw std::runtime_error("Order: argument must be a tuple");
 }
 
-// Returns the first character of a string's content as a 1-char quoted string.
 StackValue CSEMachine::builtinStem(const StackValue& arg) {
     if (arg.type != ValueType::STRING)
         throw std::runtime_error("Stem: argument must be a string");
     std::string content = stripQuotes(arg.strVal);
     if (content.empty())
-        throw std::runtime_error("Stem: cannot take stem of empty string");
+        throw std::runtime_error("Stem: empty string");
     return StackValue::makeStr("'" + std::string(1, content[0]) + "'");
 }
 
-// Returns the string content after its first character, re-wrapped in quotes.
 StackValue CSEMachine::builtinStern(const StackValue& arg) {
     if (arg.type != ValueType::STRING)
         throw std::runtime_error("Stern: argument must be a string");
@@ -520,54 +420,43 @@ StackValue CSEMachine::builtinStern(const StackValue& arg) {
     return StackValue::makeStr("'" + (content.empty() ? "" : content.substr(1)) + "'");
 }
 
-// Concatenates two strings, stripping and re-wrapping quotes.
 StackValue CSEMachine::builtinConc(const StackValue& s1, const StackValue& s2) {
     if (s1.type != ValueType::STRING || s2.type != ValueType::STRING)
         throw std::runtime_error("Conc: both arguments must be strings");
     return StackValue::makeStr("'" + stripQuotes(s1.strVal) + stripQuotes(s2.strVal) + "'");
 }
 
-// Returns true if the value is an integer.
 StackValue CSEMachine::builtinIsinteger(const StackValue& arg) {
     return StackValue::makeBool(arg.type == ValueType::INTEGER);
 }
 
-// Returns true if the value is a string.
 StackValue CSEMachine::builtinIsstring(const StackValue& arg) {
     return StackValue::makeBool(arg.type == ValueType::STRING);
 }
 
-// Returns true if the value is a boolean.
 StackValue CSEMachine::builtinIstruthvalue(const StackValue& arg) {
     return StackValue::makeBool(arg.type == ValueType::BOOL);
 }
 
-// Returns true if the value is a tuple or nil.
 StackValue CSEMachine::builtinIstuple(const StackValue& arg) {
-    return StackValue::makeBool(arg.type == ValueType::TUPLE ||
-                                 arg.type == ValueType::NIL);
+    return StackValue::makeBool(arg.type == ValueType::TUPLE || arg.type == ValueType::NIL);
 }
 
-// Returns true if the value is a function (closure, eta, built-in, or partial).
 StackValue CSEMachine::builtinIsfunction(const StackValue& arg) {
-    return StackValue::makeBool(arg.type == ValueType::CLOSURE  ||
-                                 arg.type == ValueType::ETA      ||
-                                 arg.type == ValueType::BUILTIN  ||
+    return StackValue::makeBool(arg.type == ValueType::CLOSURE ||
+                                 arg.type == ValueType::ETA     ||
+                                 arg.type == ValueType::BUILTIN ||
                                  arg.type == ValueType::PARTIAL);
 }
 
-// Returns the number of bound parameters of a closure.
 StackValue CSEMachine::builtinArity(const StackValue& arg) {
     if (arg.type == ValueType::CLOSURE || arg.type == ValueType::ETA)
         return StackValue::makeInt((int)arg.boundVars.size());
     throw std::runtime_error("Arity: argument must be a function");
 }
 
-// Returns true if the argument is nil or an empty tuple.
 StackValue CSEMachine::builtinNull(const StackValue& arg) {
-    if (arg.type == ValueType::NIL)
-        return StackValue::makeBool(true);
-    if (arg.type == ValueType::TUPLE)
-        return StackValue::makeBool(arg.tupleElems.empty());
+    if (arg.type == ValueType::NIL)   return StackValue::makeBool(true);
+    if (arg.type == ValueType::TUPLE) return StackValue::makeBool(arg.tupleElems.empty());
     throw std::runtime_error("null: argument must be a tuple or nil");
 }
