@@ -1,0 +1,2 @@
+let x = 5
+in Print (0-x, 0-10)

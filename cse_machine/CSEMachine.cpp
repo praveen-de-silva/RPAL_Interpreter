@@ -438,7 +438,11 @@ void CSEMachine::rule10_tupleIndex(StackValue& tuple, StackValue& idx) {
 void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
     const std::string& name = rator.strVal;
 
-    if (name == "Print" || name == "print") {
+    // PARTIAL must be checked before the plain "Conc" branch, otherwise the
+    // plain branch shadows it (both have name == "Conc").
+    if (rator.type == ValueType::PARTIAL && name == "Conc") {
+        stack.push_back(builtinConc(*rator.partialArg, rand));
+    } else if (name == "Print" || name == "print") {
         builtinPrint(rand);
         stack.push_back(StackValue::makeDummy());
     } else if (name == "Order") {
@@ -450,9 +454,6 @@ void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
     } else if (name == "Conc") {
         // First application: store s1 in a PARTIAL waiting for s2
         stack.push_back(StackValue::makePartial("Conc", rand));
-    } else if (rator.type == ValueType::PARTIAL && name == "Conc") {
-        // Second application: both args available, concatenate
-        stack.push_back(builtinConc(*rator.partialArg, rand));
     } else if (name == "Isinteger") {
         stack.push_back(builtinIsinteger(rand));
     } else if (name == "Isstring") {
@@ -473,8 +474,18 @@ void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
 }
 
 // Prints value to stdout with a trailing newline. Output must match rpal.exe exactly.
+// Strings are stored internally with their surrounding single quotes (e.g. "'hello'").
+// When printed standalone, the quotes are stripped. Inside a tuple they stay (see toString).
 void CSEMachine::builtinPrint(const StackValue& arg) {
-    std::cout << arg.toString() << std::endl;
+    if (arg.type == ValueType::STRING) {
+        const std::string& s = arg.strVal;
+        if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
+            std::cout << s.substr(1, s.size() - 2) << "\n";
+        else
+            std::cout << s << "\n";
+    } else {
+        std::cout << arg.toString() << "\n";
+    }
 }
 
 // Returns the number of elements in a tuple (0 for nil).
@@ -486,29 +497,37 @@ StackValue CSEMachine::builtinOrder(const StackValue& arg) {
     throw std::runtime_error("Order: argument must be a tuple");
 }
 
-// Returns the first character of a string as a 1-character string.
+// Strips the surrounding single quotes that the lexer wraps around every string
+// (e.g. the token 'hello' is stored as "'hello'" internally).
+static std::string stripQuotes(const std::string& s) {
+    if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
+        return s.substr(1, s.size() - 2);
+    return s;
+}
+
+// Returns the first character of a string's content as a 1-character string.
 StackValue CSEMachine::builtinStem(const StackValue& arg) {
     if (arg.type != ValueType::STRING)
         throw std::runtime_error("Stem: argument must be a string");
-    if (arg.strVal.empty())
+    std::string content = stripQuotes(arg.strVal);
+    if (content.empty())
         throw std::runtime_error("Stem: cannot take stem of empty string");
-    return StackValue::makeStr(std::string(1, arg.strVal[0]));
+    return StackValue::makeStr("'" + std::string(1, content[0]) + "'");
 }
 
-// Returns the string without its first character.
+// Returns the string content after its first character.
 StackValue CSEMachine::builtinStern(const StackValue& arg) {
     if (arg.type != ValueType::STRING)
         throw std::runtime_error("Stern: argument must be a string");
-    if (arg.strVal.empty())
-        return StackValue::makeStr("");
-    return StackValue::makeStr(arg.strVal.substr(1));
+    std::string content = stripQuotes(arg.strVal);
+    return StackValue::makeStr("'" + (content.empty() ? "" : content.substr(1)) + "'");
 }
 
-// Concatenates two strings. Called on second application of curried Conc.
+// Concatenates two strings (stripping and re-adding surrounding quotes).
 StackValue CSEMachine::builtinConc(const StackValue& s1, const StackValue& s2) {
     if (s1.type != ValueType::STRING || s2.type != ValueType::STRING)
         throw std::runtime_error("Conc: both arguments must be strings");
-    return StackValue::makeStr(s1.strVal + s2.strVal);
+    return StackValue::makeStr("'" + stripQuotes(s1.strVal) + stripQuotes(s2.strVal) + "'");
 }
 
 // Returns true if the value is an integer.

@@ -1,0 +1,2 @@
+let s = 'hello'
+in Print (Stem s, Stern s, Conc 'foo' 'bar')

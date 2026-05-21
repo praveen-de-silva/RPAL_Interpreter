@@ -1,0 +1,2 @@
+let f x = x
+in Print (Isfunction f, Isfunction 42, Isfunction Print)

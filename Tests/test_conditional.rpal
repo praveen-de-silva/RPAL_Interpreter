@@ -1,0 +1,2 @@
+let max a b = a gr b -> a | b
+in Print (max 3 7, max 9 4)

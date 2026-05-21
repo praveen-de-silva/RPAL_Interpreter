@@ -1,0 +1,1 @@
+Print (Isinteger 42, Isstring 'hi', Istruthvalue false, Istuple (1,2,3))
