@@ -92,20 +92,28 @@ Token Lexer::readString() {
  
     while (pos < (int)source.size() && currentChar() != '\'') {
         if (currentChar() == '\\') {
-            // Escape sequence - include both the backslash and next char
-            result += currentChar();
-            advance();
+            // Escape sequence
+            advance(); // skip backslash
             if (pos < (int)source.size()) {
                 char escaped = currentChar();
                 // Valid escapes: \t \n \\ \'
-                if (escaped == 't' || escaped == 'n' ||
-                    escaped == '\\' || escaped == '\'') {
-                    result += escaped;
+                if (escaped == 't') {
+                    result += '\t';
+                    advance();
+                } else if (escaped == 'n') {
+                    result += '\n';
+                    advance();
+                } else if (escaped == '\\') {
+                    result += '\\';
+                    advance();
+                } else if (escaped == '\'') {
+                    result += '\'';
                     advance();
                 } else {
                     // Invalid escape - include as-is and report warning
                     std::cerr << "Lexer warning: unknown escape sequence '\\"
                               << escaped << "' at line " << line << "\n";
+                    result += '\\';
                     result += escaped;
                     advance();
                 }

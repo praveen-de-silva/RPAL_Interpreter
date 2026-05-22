@@ -16,7 +16,7 @@ CSEMachine::CSEMachine(const std::vector<std::vector<CSENode>>& deltaStructures)
     const std::vector<std::string> builtins = {
         "Print", "print", "Order", "Stem", "Stern", "Conc",
         "Isinteger", "Isstring", "Istruthvalue", "Istuple",
-        "Isfunction", "Arity", "null"
+        "Isfunction", "Arity", "null", "ItoS"
     };
     for (const auto& name : builtins)
         envTable[0].bind(name, StackValue::makeBuiltin(name));
@@ -372,6 +372,8 @@ void CSEMachine::rule13_builtin(StackValue& rator, StackValue& rand) {
         stack.push_back(builtinArity(rand));
     } else if (name == "null") {
         stack.push_back(builtinNull(rand));
+    } else if (name == "ItoS") {
+        stack.push_back(builtinItoS(rand));
     } else {
         throw std::runtime_error("rule13: unknown built-in '" + name + "'");
     }
@@ -459,4 +461,10 @@ StackValue CSEMachine::builtinNull(const StackValue& arg) {
     if (arg.type == ValueType::NIL)   return StackValue::makeBool(true);
     if (arg.type == ValueType::TUPLE) return StackValue::makeBool(arg.tupleElems.empty());
     throw std::runtime_error("null: argument must be a tuple or nil");
+}
+
+StackValue CSEMachine::builtinItoS(const StackValue& arg) {
+    if (arg.type != ValueType::INTEGER)
+        throw std::runtime_error("ItoS: argument must be an integer");
+    return StackValue::makeStr("'" + std::to_string(arg.intVal) + "'");
 }

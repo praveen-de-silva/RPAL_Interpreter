@@ -109,6 +109,7 @@ private:
     StackValue builtinIsfunction(const StackValue& arg);
     StackValue builtinArity(const StackValue& arg);
     StackValue builtinNull(const StackValue& arg);
+    StackValue builtinItoS(const StackValue& arg);
 
 public:
     // Constructor: receives the delta arrays from Flattener::getDeltas()

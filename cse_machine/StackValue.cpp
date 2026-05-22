@@ -116,7 +116,12 @@ std::string StackValue::toString() const {
             return std::to_string(intVal);
 
         case ValueType::STRING:
+        {
+            // Strip surrounding quotes for output
+            if (strVal.size() >= 2 && strVal.front() == '\'' && strVal.back() == '\'')
+                return strVal.substr(1, strVal.size() - 2);
             return strVal;
+        }
 
         case ValueType::BOOL:
             return boolVal ? "true" : "false";
