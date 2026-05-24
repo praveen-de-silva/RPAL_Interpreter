@@ -1,0 +1,7 @@
+let N = 0
+in Print( 
+    N gr 0 -> 'Positive'
+  | N ls 0 -> 'Negative'
+  | 'Zero')
+
+

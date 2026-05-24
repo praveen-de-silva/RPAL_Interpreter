@@ -1,0 +1,6 @@
+let max = 50
+in let rec fib (a, b, limit, lst) =
+    a gr limit -> lst |
+    a le 0 -> fib (b, a+b, limit, lst) |
+    fib (b, a+b, limit, lst aug a)
+in Print (fib (0, 1, max, nil))

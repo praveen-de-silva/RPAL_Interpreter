@@ -1,0 +1,5 @@
+let N = 10
+in let rec Sum X =
+    X eq 0 -> 0
+  | X + Sum(X-1)
+in Print( Sum N )

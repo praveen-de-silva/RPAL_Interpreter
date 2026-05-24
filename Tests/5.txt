@@ -1,0 +1,7 @@
+let N = 122
+in let rec Reverse (Num, Rev) =
+    Num eq 0 -> Rev
+  | Reverse(Num / 10, Rev * 10 + Num - (Num / 10) * 10)
+in Print(
+    Reverse(N, 0) eq N -> 'Palindrome'
+  | 'Not Palindrome' )

@@ -1,0 +1,6 @@
+let Greatest (A,B,C) =
+    A ge B ->
+        (A ge C -> A | C)
+    |
+        (B ge C -> B | C)
+in Print (Greatest (10, 25, 5))

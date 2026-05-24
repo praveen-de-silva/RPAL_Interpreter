@@ -1,0 +1,9 @@
+let start = 10 and max = 200
+in let rec rev (N, R) = 
+    N eq 0 -> R 
+  | rev (N/10, R*10 + N - (N/10)*10)
+in let rec pal (I, limit, lst) =
+    I gr limit -> lst
+  | rev (I, 0) eq I -> pal (I+1, limit, lst aug I)
+  | pal (I+1, limit, lst)
+in Print (pal (start, max, nil))

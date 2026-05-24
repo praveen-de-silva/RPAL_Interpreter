@@ -1,0 +1,5 @@
+let N = 5
+in let rec Fact X =
+    X eq 0 -> 1
+  | X * Fact(X-1)
+in Print( Fact N )
