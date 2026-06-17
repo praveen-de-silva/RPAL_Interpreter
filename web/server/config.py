@@ -8,8 +8,13 @@ ENV = os.getenv("RPAL_ENV", "development")  # development | staging | production
 DEBUG = ENV == "development"
 
 # Server Settings
-HOST = os.getenv("RPAL_IDE_HOST", "127.0.0.1" if DEBUG else "0.0.0.0")
-PORT = int(os.getenv("RPAL_IDE_PORT", "8787"))
+# On Heroku, PORT env var is mandatory and must be used
+if "PORT" in os.environ:
+    HOST = "0.0.0.0"
+    PORT = int(os.environ["PORT"])
+else:
+    HOST = os.getenv("RPAL_IDE_HOST", "127.0.0.1" if DEBUG else "0.0.0.0")
+    PORT = int(os.getenv("RPAL_IDE_PORT", "8787"))
 
 # SSL/TLS Settings
 USE_SSL = os.getenv("RPAL_USE_SSL", "false").lower() == "true"
