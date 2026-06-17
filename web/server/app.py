@@ -144,13 +144,13 @@ def main() -> None:
     if ssl_context:
         server.socket = ssl_context.wrap_socket(server.socket, server_side=True)
     
-    print(f"🚀 RPAL IDE running at {protocol}://{HOST}:{PORT}/")
+    print(f"RPAL IDE running at {protocol}://{HOST}:{PORT}/")
     if USE_SSL:
-        print("🔐 SSL/TLS enabled")
+        print("SSL/TLS enabled")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n✋ Shutting down...")
+        print("\nShutting down...")
         server.shutdown()
 
 

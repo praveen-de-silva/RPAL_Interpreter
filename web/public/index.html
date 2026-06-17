@@ -722,7 +722,7 @@ in Print (f 5)</textarea>
     outputHint.textContent = meta.hint;
 
     try {
-      const resp = await fetch('http://127.0.0.1:8787/api/run', {
+      const resp = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, mode })
