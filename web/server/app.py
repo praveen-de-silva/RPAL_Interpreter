@@ -13,8 +13,13 @@ try:
         TIMEOUT_SECONDS, MAX_CODE_SIZE_KB, get_ssl_context
     )
 except ImportError:
-    HOST = os.getenv("RPAL_IDE_HOST", "127.0.0.1")
-    PORT = int(os.getenv("RPAL_IDE_PORT", "8787"))
+    # On Heroku, PORT is required and HOST must be 0.0.0.0 to listen on all interfaces
+    if "PORT" in os.environ:
+        HOST = "0.0.0.0"
+        PORT = int(os.environ["PORT"])
+    else:
+        HOST = os.getenv("RPAL_IDE_HOST", "127.0.0.1")
+        PORT = int(os.getenv("RPAL_IDE_PORT", "8787"))
     USE_SSL = False
     SECURITY_HEADERS = {}
     ALLOWED_ORIGINS = ["localhost"]
