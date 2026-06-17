@@ -34,12 +34,20 @@ PUBLIC_DIR = ROOT / "public"
 
 
 def find_interpreter() -> Path | None:
-    candidates = [
-        COMPILER_BIN / "rpal20.exe",
-        COMPILER_BIN / "rpal20",
-        ROOT.parent.parent / "rpal20.exe",
-        ROOT.parent.parent / "rpal20",
-    ]
+    if os.name == "nt":
+        candidates = [
+            COMPILER_BIN / "rpal20.exe",
+            COMPILER_BIN / "rpal20",
+            ROOT.parent.parent / "rpal20.exe",
+            ROOT.parent.parent / "rpal20",
+        ]
+    else:
+        candidates = [
+            COMPILER_BIN / "rpal20",
+            ROOT.parent.parent / "rpal20",
+            COMPILER_BIN / "rpal20.exe",
+            ROOT.parent.parent / "rpal20.exe",
+        ]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
@@ -129,6 +137,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"output": stdout, "binary": interpreter.name})
         except subprocess.TimeoutExpired:
             self._send_json(504, {"error": f"Interpreter timed out after {TIMEOUT_SECONDS} seconds"})
+        except OSError as exc:
+            self._send_json(500, {"error": f"Could not execute interpreter: {exc}"})
         finally:
             try:
                 os.remove(temp_path)

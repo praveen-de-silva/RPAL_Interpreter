@@ -12,12 +12,20 @@ ROOT = Path(__file__).resolve().parent
 
 
 def find_interpreter() -> Path | None:
-    candidates = [
-        ROOT / "rpal20.exe",
-        ROOT / "rpal20",
-        ROOT.parent / "rpal20.exe",
-        ROOT.parent / "rpal20",
-    ]
+    if os.name == "nt":
+        candidates = [
+            ROOT / "rpal20.exe",
+            ROOT / "rpal20",
+            ROOT.parent / "rpal20.exe",
+            ROOT.parent / "rpal20",
+        ]
+    else:
+        candidates = [
+            ROOT / "rpal20",
+            ROOT.parent / "rpal20",
+            ROOT / "rpal20.exe",
+            ROOT.parent / "rpal20.exe",
+        ]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
@@ -91,6 +99,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"output": stdout, "binary": interpreter.name})
         except subprocess.TimeoutExpired:
             self._send_json(504, {"error": "Interpreter timed out after 30 seconds"})
+        except OSError as exc:
+            self._send_json(500, {"error": f"Could not execute interpreter: {exc}"})
         finally:
             try:
                 os.remove(temp_path)
