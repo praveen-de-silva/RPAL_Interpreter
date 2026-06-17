@@ -1,0 +1,26 @@
+let
+  rec concat A B =
+    Order A eq 0 -> B
+    | ((A 1), concat (A 2) B)
+in
+let
+  rec mapCons h P =
+    Order P eq 0 -> nil
+    | ((h, (P 1)), mapCons h (P 2))
+in
+let
+  rec insertEverywhere x L =
+    Order L eq 0 -> ((x, nil), nil)
+    | ((x, L), mapCons (L 1) (insertEverywhere x (L 2)))
+in
+let
+  rec insertAll x P =
+    Order P eq 0 -> nil
+    | concat (insertEverywhere x (P 1)) (insertAll x (P 2))
+in
+let
+  rec Perm L =
+    Order L eq 0 -> (nil, nil)
+    | insertAll (L 1) (Perm (L 2))
+in
+  Print (Perm (1, (2, (3, nil))))

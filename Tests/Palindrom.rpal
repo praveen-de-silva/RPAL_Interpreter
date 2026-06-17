@@ -1,0 +1,5 @@
+let rec Reverse s = 
+    s eq '' -> '' 
+    | Conc (Reverse (Stern s)) (Stem s)
+in let IsPalindrom s = s eq (Reverse s) -> 'true' | 'false'
+in Print (IsPalindrom 'amma')

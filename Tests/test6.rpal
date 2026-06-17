@@ -1,0 +1,5 @@
+let rec fact n = 
+    n eq 0 -> 1
+    | n gr 0 -> n * fact (n-1)
+    | 'errror'
+in Print (fact (3))

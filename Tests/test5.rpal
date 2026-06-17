@@ -1,0 +1,6 @@
+let rec hanoi n from mid to = 
+    n eq 0 -> ''
+    | (hanoi (n-1) from to mid)
+    @Conc from @Conc ' -> ' @Conc to @Conc '\n' @Conc
+    (hanoi (n-1) mid from to)
+in Print (hanoi 3 'A' 'B' 'C')

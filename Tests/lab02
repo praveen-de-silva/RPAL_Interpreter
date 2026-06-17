@@ -1,0 +1,4 @@
+let rec iter n a b acc =
+    a eq b -> acc
+    | iter n (a+1) b (acc aug (a*n))
+in Print (iter 4 0 10 nil)

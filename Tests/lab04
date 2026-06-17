@@ -1,0 +1,6 @@
+let rec f n = 
+    n < 10 -> n
+    | (n - n/10*10) + f (n/10)
+in let isSumOdd n = 
+    f n - (f n)/2*2 eq 1 -> 'Sum is Odd' | 'Sum is Even'
+in Print (isSumOdd 222) 

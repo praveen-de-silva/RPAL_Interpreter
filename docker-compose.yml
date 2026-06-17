@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  rpal-ide:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      RPAL_IDE_PORT: 8787
+      RPAL_IDE_HOST: 0.0.0.0
+    volumes:
+      - ./compiler/bin:/app/compiler/bin:ro
+    restart: unless-stopped

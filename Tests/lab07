@@ -1,0 +1,7 @@
+let rec count a b oddCount evenCount = 
+    a gr b 
+    -> (oddCount, evenCount)
+    | (a/2*2) eq a 
+        -> count (a+1) b oddCount (evenCount+1) 
+        | count (a+1) b (oddCount+1) evenCount
+in Print (count 2 50 0 0)

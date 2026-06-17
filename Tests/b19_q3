@@ -1,0 +1,8 @@
+let rec THanoi from to mid n =
+    n eq 0 
+    -> ''
+    | THanoi from mid to (n-1) @Conc
+    'Move ' @Conc from @Conc ' to ' @Conc to @Conc '\n' @Conc
+    THanoi mid to from (n-1)
+
+in Print(THanoi 'A' 'B' 'C' 3)

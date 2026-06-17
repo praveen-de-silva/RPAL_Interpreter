@@ -1,0 +1,5 @@
+let greader m =
+    m ge 75 -> 'Good'
+    | m ge 55 -> 'Okay'
+    | 'Bad'
+in Print (greader 78)

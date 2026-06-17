@@ -1,0 +1,4 @@
+let findMin a b c = 
+    a < b  & a < c -> a
+    | b < a & b < c -> b | c
+in Print ( findMin 21 4 10 )

@@ -1,0 +1,2 @@
+let f a n = a ** n
+in Print (f 2 4)

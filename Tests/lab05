@@ -1,0 +1,4 @@
+let rec f i n a b t = 
+    n < a -> f (i+1) (n+i) a b t
+    | n >= a & n <= b -> f (i+1) (n+i) a b (t aug (n)) | t
+in Print (f 0 0 3 100 nil)
