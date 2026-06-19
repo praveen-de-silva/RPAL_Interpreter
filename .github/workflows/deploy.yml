@@ -89,6 +89,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Compile interpreter for Linux
+        run: |
+          sudo apt-get install -y g++
+          make
+          cp rpal20 compiler/bin/rpal20
+          git config user.email "ci@github.com"
+          git config user.name "GitHub Actions"
+          git add -f compiler/bin/rpal20
+          git commit -m "CI: build fresh Linux binary [skip deploy]" || echo "Binary unchanged"
+
       - name: Deploy to Heroku
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
