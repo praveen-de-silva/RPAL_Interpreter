@@ -10,28 +10,19 @@ namespace
             return;
         }
 
+        std::string label;
+        if (node->type == "IDENTIFIER" || node->type == "INTEGER" || node->type == "STRING")
+            label = "<" + node->type + ":" + node->value + ">";
+        else
+            label = node->type;
+
         if (isRoot)
         {
-            if (node->type == "IDENTIFIER" || node->type == "INTEGER" || node->type == "STRING")
-            {
-                std::cout << node->value << "\n";
-            }
-            else
-            {
-                std::cout << node->type << "\n";
-            }
+            std::cout << label << "\n";
         }
         else
         {
-            std::cout << prefix << (isLast ? "└── " : "├── ");
-            if (node->type == "IDENTIFIER" || node->type == "INTEGER" || node->type == "STRING")
-            {
-                std::cout << node->value << "\n";
-            }
-            else
-            {
-                std::cout << node->type << "\n";
-            }
+            std::cout << prefix << (isLast ? "└── " : "├── ") << label << "\n";
         }
 
         std::string childPrefix = prefix + (isRoot ? "" : (isLast ? "    " : "│   "));
