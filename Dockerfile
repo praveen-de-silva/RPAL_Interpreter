@@ -1,5 +1,5 @@
 # Stage 1: compile the RPAL interpreter from source
-FROM gcc:13-slim AS builder
+FROM gcc:13 AS builder
 
 WORKDIR /src
 COPY main.cpp ./
